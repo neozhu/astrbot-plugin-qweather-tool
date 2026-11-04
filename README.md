@@ -140,7 +140,7 @@ pip install -r astrbot_plugin_qweather_tool/requirements.txt
 ## 🏛️ 项目结构
 
 ```text
-astrbot_plugin_qweather/
+astrbot-plugin-qweather-tool/
 ├── main.py                    # AstrBot Star 插件入口、get_weather 注册、生命周期
 ├── weather_service.py         # 业务编排、QueryPlanner、Tool Result 组装
 ├── qweather_client.py         # 和风天气异步 HTTP 客户端、HTTPS 校验、QWeatherError 映射
