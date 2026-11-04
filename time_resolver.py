@@ -176,14 +176,19 @@ class TimeResolver:
 
         return None
 
-    def resolve(self, when_text: str, tz: str = "Asia/Shanghai") -> ResolvedTime:
+    def resolve(
+        self,
+        when_text: str,
+        tz: str = "Asia/Shanghai",
+        clock_now: Optional[datetime] = None,
+    ) -> ResolvedTime:
         """Resolve when expression with target timezone."""
         try:
             tz_obj = ZoneInfo(tz)
         except Exception:
             tz_obj = ZoneInfo("Asia/Shanghai")
 
-        now_utc = self.clock()
+        now_utc = clock_now if clock_now is not None else self.clock()
         now_local = now_utc.astimezone(tz_obj)
         clean_input = (when_text or "").strip()
 

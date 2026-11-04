@@ -118,15 +118,23 @@ class LocationResolver:
         """Resolve location according to 5-tier priority matching chain."""
         text = (location_text or "").strip()
 
-        # Step 1: Check empty location
+        # Step 1: Check empty location (SPEC §6.1)
         if not text:
+            # Priority 2 & 3: Valid confirmed location in current conversation
+            if confirmed_location:
+                return LocationResolutionResult(
+                    status="ok",
+                    location=confirmed_location,
+                    resolution_method="confirmed_location_reuse",
+                )
+
+            # Priority 4: default_city for private chats only
             if not is_group and default_city:
-                # Private chat can fall back to default_city
                 return await self.resolve(
                     location_text=default_city,
                     default_city="",
                     is_group=False,
-                    confirmed_location=confirmed_location,
+                    confirmed_location=None,
                 )
             return LocationResolutionResult(status="need_location")
 

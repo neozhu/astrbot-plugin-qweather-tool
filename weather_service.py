@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from location_resolver import LocationResolver, ResolvedLocation
 from qweather_client import QWeatherClient
 from time_resolver import TimeResolver
+from weather_context import WeatherContextStore
 from weather_models import (
     normalize_current_weather,
     normalize_daily_forecast,
@@ -49,6 +50,7 @@ class WeatherService:
 
         self.location_resolver = LocationResolver(self.client)
         self.time_resolver = TimeResolver()
+        self.context_store = WeatherContextStore()
 
     def _is_group_event(self, event: Any) -> bool:
         """Detect whether the current message origin is a group chat."""
@@ -73,41 +75,102 @@ class WeatherService:
         is_group = self._is_group_event(event)
         warnings: List[str] = []
 
-        # 1. Normalize Focus (SPEC §4.1, §8.2)
-        focus, focus_warning = normalize_focus(focus_text)
+        scope_key = self.context_store.extract_scope_key(event)
+        ctx = self.context_store.get_context(scope_key)
+        now_dt = self.time_resolver.clock()
+
+        # Check for resumable pending request (SPEC §5.3)
+        pending = self.context_store.get_resumable_pending(event, is_group=is_group, now=now_dt)
+
+        # 1. Normalize Focus with Pending / Context inheritance (SPEC §4.1, §5.2, §8.2)
+        effective_focus_text = focus_text
+        if not (focus_text or "").strip():
+            if pending and pending.requested_focus:
+                effective_focus_text = pending.requested_focus
+            elif ctx.get_valid_focus(now_dt):
+                effective_focus_text = ctx.get_valid_focus(now_dt)
+
+        focus, focus_warning = normalize_focus(effective_focus_text)
         if focus_warning:
             warnings.append(focus_warning)
 
-        # 2. Resolve Location (SPEC §6)
+        # 2. Resolve Location with Context inheritance (SPEC §5.2, §6)
+        effective_confirmed_loc = confirmed_location or ctx.get_valid_location(now_dt)
         loc_res = await self.location_resolver.resolve(
             location_text=location_text,
             default_city=self.default_city,
             is_group=is_group,
-            confirmed_location=confirmed_location,
+            confirmed_location=effective_confirmed_loc,
         )
 
         if loc_res.status == "need_location":
+            # Save pending request (SPEC §5.3, §5.4, C04, C62)
+            self.context_store.save_pending(
+                event=event,
+                kind="need_location",
+                requested_focus=focus,
+                requested_when=when_text or (pending.requested_when if pending else "now"),
+                anchor_utc=now_dt,
+            )
             return {
                 "status": "need_location",
+                "pending_saved": True,
                 "warnings": warnings,
             }
 
         if loc_res.status == "ambiguous_location":
             warnings.append("multiple_matching_locations")
+            self.context_store.save_pending(
+                event=event,
+                kind="ambiguous_location",
+                requested_focus=focus,
+                requested_when=when_text or (pending.requested_when if pending else "now"),
+                anchor_utc=now_dt,
+            )
             return {
                 "status": "ambiguous_location",
                 "candidates": loc_res.candidates,
                 "warnings": warnings,
+                "pending_saved": True,
             }
 
         loc = loc_res.location
         loc_dict = loc.to_dict() if loc else {}
         loc_tz = loc.tz if loc else "Asia/Shanghai"
 
-        # 3. Resolve Time (SPEC §7)
-        time_res = self.time_resolver.resolve(when_text=when_text, tz=loc_tz)
+        # Update confirmed location in context (SPEC §5.2)
+        if loc:
+            ctx.set_confirmed_location(loc, now_dt)
+
+        # 3. Resolve Time with Pending clock stability / Context inheritance (SPEC §5.2, §5.3 #5, §7)
+        effective_when = when_text
+        effective_clock = None
+        if not (when_text or "").strip():
+            if pending and pending.requested_when:
+                effective_when = pending.requested_when
+                effective_clock = pending.anchor_utc
+            elif ctx.get_valid_when(now_dt):
+                effective_when = ctx.get_valid_when(now_dt)
+
+        time_res = self.time_resolver.resolve(
+            when_text=effective_when,
+            tz=loc_tz,
+            clock_now=effective_clock,
+        )
         target = time_res.target
         resolution = time_res.resolution
+
+        # Clear pending now that request is actively resolved (SPEC §5.3 #7)
+        if pending:
+            ctx.clear_pending()
+
+        # Update conversation topic state (SPEC §5.2)
+        ctx.update_topic(
+            focus=focus,
+            period=target,
+            when_text=effective_when or "now",
+            now=now_dt,
+        )
 
         if resolution.status == "fallback_now" and resolution.reason == "unrecognized_explicit_time":
             warnings.append("time_fallback_now")
