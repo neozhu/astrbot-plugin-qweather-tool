@@ -108,6 +108,7 @@ async def test_query_planner_routes_to_daily_without_current_c44(daily_v1_data):
     from location_resolver import ResolvedLocation
 
     service = WeatherService(api_host="https://test.qweatherapi.com", api_key="test_key")
+    service.time_resolver.clock = lambda: datetime(2026, 11, 4, 2, 0, 0, tzinfo=timezone.utc)
     loc = ResolvedLocation(
         id="101190404", name="昆山", adm1="江苏省", adm2="苏州市",
         country="中国", lat=31.38, lon=120.98, tz="Asia/Shanghai",
@@ -136,6 +137,7 @@ async def test_query_planner_routes_to_hourly_for_future_daypart_c45_c46(hourly_
     from location_resolver import ResolvedLocation
 
     service = WeatherService(api_host="https://test.qweatherapi.com", api_key="test_key")
+    service.time_resolver.clock = lambda: datetime(2026, 11, 4, 2, 0, 0, tzinfo=timezone.utc)
     loc = ResolvedLocation(
         id="101190404", name="昆山", adm1="江苏省", adm2="苏州市",
         country="中国", lat=31.38, lon=120.98, tz="Asia/Shanghai",

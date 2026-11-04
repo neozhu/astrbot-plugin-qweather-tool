@@ -123,6 +123,7 @@ async def test_clothing_evidence_structure_c20_c55(mock_kunshan):
     from weather_service import WeatherService
 
     service = WeatherService(api_host="https://test.qweatherapi.com", api_key="test_key")
+    service.time_resolver.clock = lambda: datetime(2026, 11, 4, 2, 0, 0, tzinfo=timezone.utc)
     event = MockAstrEvent()
 
     # Mock hourly forecast
