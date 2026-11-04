@@ -204,3 +204,51 @@ def test_plugin_package_loading_isolated_sys_path():
     finally:
         sys.path = orig_sys_path
         sys.modules.pop("data.plugins.astrbot_plugin_qweather_tool.main", None)
+
+
+@pytest.mark.asyncio
+async def test_plugin_view_and_web_api_endpoints():
+    """Verify plugin view files exist and Web API endpoints handle test requests."""
+    from main import QWeatherPlugin
+    from unittest.mock import MagicMock
+
+    view_path = ROOT_DIR / "views" / "test" / "index.html"
+    assert view_path.exists(), "views/test/index.html must exist"
+    content = view_path.read_text(encoding="utf-8")
+    assert "测试 API 连通性" in content
+    assert "执行天气查询测试" in content
+
+    # Test status endpoint
+    mock_ctx = MagicMock()
+    mock_ctx.register_web_api = MagicMock()
+    plugin = QWeatherPlugin(mock_ctx, {
+        "api_host": "devapi.qweather.com",
+        "api_key": "1234567890abcdef",
+        "default_city": "北京"
+    })
+
+    # Verify routes registered
+    assert mock_ctx.register_web_api.call_count >= 4
+
+    # Status handler test
+    status_resp = await plugin.handle_status()
+    code = getattr(status_resp, "status_code", 200)
+    assert code == 200
+
+    # View handler test
+    view_resp = await plugin.handle_view_test()
+    v_code = getattr(view_resp, "status_code", 200)
+    assert v_code == 200
+
+    # Missing API key test for handle_test_connection
+    plugin_nokey = QWeatherPlugin(mock_ctx, {
+        "api_host": "devapi.qweather.com",
+        "api_key": "",
+        "default_city": "北京"
+    })
+    conn_resp = await plugin_nokey.handle_test_connection()
+    assert conn_resp is not None
+
+    await plugin.terminate()
+    await plugin_nokey.terminate()
+

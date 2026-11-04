@@ -1,0 +1,8 @@
+{
+  "views": {
+    "test": {
+      "title": "Connection Test",
+      "description": "Test QWeather API connectivity and query resolution"
+    }
+  }
+}

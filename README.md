@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![AstrBot](https://img.shields.io/badge/AstrBot-4.x-green.svg)](https://github.com/Soulter/AstrBot)
-[![Tests](https://img.shields.io/badge/Tests-46%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-48%20Passed-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 面向 [AstrBot](https://github.com/Soulter/AstrBot) LLM Agent 的**上下文感知和风天气插件**。
@@ -95,6 +95,18 @@ pip install -r astrbot_plugin_qweather_tool/requirements.txt
 | `default_city` | string | 否 | `""` | 私聊默认查询城市（建议填写完整地名，如 `江苏省苏州市昆山市`；群聊不生效） |
 
 > **安全提示**：请妥善保护 AstrBot 配置文件及备份，避免将包含 `api_key` 的配置提交至公开代码仓库。
+
+### 4. 连通性测试与可视化调试面板 (Plugin View)
+
+本插件原生集成了 AstrBot Dashboard 插件视图（Plugin View）与后端 Web API：
+
+1. 打开 AstrBot 控制台 -> **插件管理**。
+2. 找到「和风天气工具」卡片，点击详情或操作栏中的**「连接测试与调试」**按钮。
+3. 在测试面板中：
+   - 点击 **「测试 API 连通性」** 按钮：一键检测服务器与 QWeather API 的网络连通性、HTTPS 握手耗时及 `api_key` 鉴权状态。
+   - 在 **「天气查询即时测试」** 输入任意城市（如“北京”、“东京”）和时间短语（如“今天”、“明天 vs 今天”），点击 **「执行天气查询测试」**，即可实时预览结构化天气卡片、穿衣温差客观建议及完整 LLM Tool Result 原文。
+4. 也支持在浏览器中通过内部路由直接访问测试面板：
+   `http://<AstrBot服务器地址>/api/plug/astrbot_plugin_qweather_tool/test`
 
 ---
 
