@@ -228,8 +228,7 @@ async def test_plugin_view_and_web_api_endpoints():
     view_path = ROOT_DIR / "views" / "test" / "index.html"
     assert view_path.exists(), "views/test/index.html must exist"
     content = view_path.read_text(encoding="utf-8")
-    assert "测试 API 连通性" in content
-    assert "执行天气查询测试" in content
+    assert "开始测试" in content
 
     # Test status endpoint
     mock_ctx = MagicMock()
@@ -264,4 +263,24 @@ async def test_plugin_view_and_web_api_endpoints():
 
     await plugin.terminate()
     await plugin_nokey.terminate()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status,success", [("ok", True), ("api_error", False), ("need_location", False)])
+async def test_query_panel_reports_weather_status(status, success):
+    from unittest.mock import AsyncMock
+    from quart import Quart
+    from main import QWeatherPlugin
+
+    plugin = QWeatherPlugin(object(), {"default_city": "昆山"})
+    plugin.weather_service.query = AsyncMock(return_value={"status": status})
+    app = Quart(__name__)
+    try:
+        async with app.test_request_context("/test-query", method="POST", json={"when": "now"}):
+            response = await plugin.handle_test_query()
+            data = await response.get_json()
+        assert data["success"] is success
+        assert data["result"] == {"status": status}
+    finally:
+        await plugin.terminate()
 

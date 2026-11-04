@@ -329,7 +329,7 @@ class QWeatherPlugin(Star):
                 focus_text=focus,
             )
             return json_response({
-                "success": True,
+                "success": result.get("status") == "ok",
                 "result": result,
                 "input": {
                     "location": location,
