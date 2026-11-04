@@ -1,0 +1,7 @@
+name: astrbot_plugin_qweather_tool
+version: "0.1.0"
+author: neozhu
+description: "A context-aware weather tool for AstrBot LLM agents, powered by QWeather."
+repo: "https://github.com/neozhu/astrbot-plugin-qweather-tool"
+dependencies:
+  - "httpx>=0.28.0"

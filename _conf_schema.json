@@ -1,0 +1,18 @@
+{
+  "api_host": {
+    "description": "和风天气专属 API Host，例如 abcxyz.qweatherapi.com",
+    "type": "string",
+    "default": ""
+  },
+  "api_key": {
+    "description": "和风天气 API Key",
+    "type": "string",
+    "secret": true,
+    "default": ""
+  },
+  "default_city": {
+    "description": "私聊默认查询城市，可留空；推荐填写完整行政区，如 江苏省苏州市昆山市",
+    "type": "string",
+    "default": ""
+  }
+}
