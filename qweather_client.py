@@ -111,6 +111,68 @@ class QWeatherClient:
             logger.error(f"Current weather request error: {e}")
             return {}
 
+    async def get_daily_forecast(
+        self,
+        lat: float,
+        lon: float,
+        days: int = 7,
+        lang: str = "zh",
+    ) -> List[Dict[str, Any]]:
+        """Fetch daily forecast from /weather/v1/daily/{lat:.2f}/{lon:.2f} (SPEC §10.2)."""
+        lat_formatted = f"{float(lat):.2f}"
+        lon_formatted = f"{float(lon):.2f}"
+
+        url = f"{self.api_host}/weather/v1/daily/{lat_formatted}/{lon_formatted}"
+        params: Dict[str, Any] = {
+            "days": days,
+            "lang": lang,
+        }
+
+        client = self._get_client()
+        try:
+            resp = await client.get(url, params=params, headers=self._build_headers())
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("code") == "200":
+                    return data.get("daily", [])
+                logger.warning(f"QWeather daily API returned code={data.get('code')}")
+                return []
+            return []
+        except Exception as e:
+            logger.error(f"Daily forecast request error: {e}")
+            return []
+
+    async def get_hourly_forecast(
+        self,
+        lat: float,
+        lon: float,
+        hours: int = 24,
+        lang: str = "zh",
+    ) -> List[Dict[str, Any]]:
+        """Fetch hourly forecast from /weather/v1/hourly/{lat:.2f}/{lon:.2f} (SPEC §10.2)."""
+        lat_formatted = f"{float(lat):.2f}"
+        lon_formatted = f"{float(lon):.2f}"
+
+        url = f"{self.api_host}/weather/v1/hourly/{lat_formatted}/{lon_formatted}"
+        params: Dict[str, Any] = {
+            "hours": hours,
+            "lang": lang,
+        }
+
+        client = self._get_client()
+        try:
+            resp = await client.get(url, params=params, headers=self._build_headers())
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("code") == "200":
+                    return data.get("hourly", [])
+                logger.warning(f"QWeather hourly API returned code={data.get('code')}")
+                return []
+            return []
+        except Exception as e:
+            logger.error(f"Hourly forecast request error: {e}")
+            return []
+
     async def close(self) -> None:
         """Close underlying HTTP client."""
         if self._client and not self._client.is_closed:
