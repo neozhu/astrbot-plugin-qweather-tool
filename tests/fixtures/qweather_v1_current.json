@@ -1,0 +1,33 @@
+{
+  "code": "200",
+  "updateTime": "2026-11-04T13:20:00+08:00",
+  "now": {
+    "obsTime": "2026-11-04T13:15:00+08:00",
+    "temperature": {
+      "value": "18.5",
+      "unit": "C"
+    },
+    "feelsLike": {
+      "value": "17.0",
+      "unit": "C"
+    },
+    "condition": {
+      "text": "多云",
+      "code": "101"
+    },
+    "wind": {
+      "speed": {
+        "value": "3.2",
+        "unit": "m/s"
+      },
+      "direction": "东风"
+    },
+    "precipitation": {
+      "amount": {
+        "value": "0.0",
+        "unit": "mm"
+      }
+    },
+    "humidity": "65"
+  }
+}

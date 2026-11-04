@@ -79,6 +79,38 @@ class QWeatherClient:
             logger.error(f"GeoAPI search error: {e}")
             return []
 
+    async def get_current_weather(
+        self,
+        lat: float,
+        lon: float,
+        lang: str = "zh",
+        local_time: bool = False,
+    ) -> Dict[str, Any]:
+        """Fetch real-time weather from /weather/v1/current/{lat:.2f}/{lon:.2f} (SPEC §10.2, §10.3)."""
+        lat_formatted = f"{float(lat):.2f}"
+        lon_formatted = f"{float(lon):.2f}"
+
+        url = f"{self.api_host}/weather/v1/current/{lat_formatted}/{lon_formatted}"
+        params: Dict[str, Any] = {
+            "lang": lang,
+            "localTime": "true" if local_time else "false",
+        }
+
+        client = self._get_client()
+        try:
+            resp = await client.get(url, params=params, headers=self._build_headers())
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("code") == "200":
+                    return data.get("now", {})
+                logger.warning(f"QWeather current API returned code={data.get('code')}")
+                return {}
+            logger.warning(f"QWeather current API HTTP error: status={resp.status_code}")
+            return {}
+        except Exception as e:
+            logger.error(f"Current weather request error: {e}")
+            return {}
+
     async def close(self) -> None:
         """Close underlying HTTP client."""
         if self._client and not self._client.is_closed:
