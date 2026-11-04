@@ -1,10 +1,13 @@
 import datetime
 from datetime import timedelta
+import logging
+import re
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
+from cache import SingleFlight, TTLCache
 from location_resolver import LocationResolver, ResolvedLocation
-from qweather_client import QWeatherClient
+from qweather_client import QWeatherClient, QWeatherError
 from temperature_comparator import TemperatureComparator
 from time_resolver import TimeResolver
 from weather_context import WeatherContextStore
@@ -55,6 +58,8 @@ class WeatherService:
         self.time_resolver = TimeResolver()
         self.context_store = WeatherContextStore()
         self.comparator = TemperatureComparator()
+        self.cache = TTLCache()
+        self.single_flight = SingleFlight()
 
     def _is_group_event(self, event: Any) -> bool:
         """Detect whether the current message origin is a group chat."""
@@ -76,8 +81,50 @@ class WeatherService:
         confirmed_location: Optional[ResolvedLocation] = None,
     ) -> Dict[str, Any]:
         """Process weather query and return structured Tool Result."""
+        try:
+            return await self._execute_query(
+                event=event,
+                location_text=location_text,
+                when_text=when_text,
+                focus_text=focus_text,
+                confirmed_location=confirmed_location,
+            )
+        except QWeatherError as e:
+            return {
+                "status": e.error_code,
+                "warnings": [e.error_code],
+            }
+        except Exception as e:
+            logger.error(f"Weather query unexpected error: {type(e).__name__}")
+            return {
+                "status": "provider_unavailable",
+                "warnings": ["provider_unavailable"],
+            }
+
+    async def _execute_query(
+        self,
+        event: Any,
+        location_text: str,
+        when_text: str,
+        focus_text: str,
+        confirmed_location: Optional[ResolvedLocation] = None,
+    ) -> Dict[str, Any]:
         is_group = self._is_group_event(event)
         warnings: List[str] = []
+
+        # Check unsupported forecast range (max 10 days) (SPEC §8.3, C14)
+        clean_when = (when_text or "").strip()
+        m_days = re.match(r"^\+(\d+)d", clean_when)
+        if m_days and int(m_days.group(1)) > 10:
+            return {
+                "status": "unsupported_period",
+                "warnings": ["forecast_out_of_range"],
+            }
+
+        # Check contradictory when='now@morning' (SPEC §4.2, C65)
+        if clean_when.lower() == "now@morning":
+            warnings.append("time_fallback_now")
+            clean_when = "now"
 
         scope_key = self.context_store.extract_scope_key(event)
         ctx = self.context_store.get_context(scope_key)
@@ -113,7 +160,7 @@ class WeatherService:
                 event=event,
                 kind="need_location",
                 requested_focus=focus,
-                requested_when=when_text or (pending.requested_when if pending else "now"),
+                requested_when=clean_when or (pending.requested_when if pending else "now"),
                 anchor_utc=now_dt,
             )
             return {
@@ -128,7 +175,7 @@ class WeatherService:
                 event=event,
                 kind="ambiguous_location",
                 requested_focus=focus,
-                requested_when=when_text or (pending.requested_when if pending else "now"),
+                requested_when=clean_when or (pending.requested_when if pending else "now"),
                 anchor_utc=now_dt,
             )
             return {
@@ -147,9 +194,9 @@ class WeatherService:
             ctx.set_confirmed_location(loc, now_dt)
 
         # 3. Resolve Time with Pending clock stability / Context inheritance (SPEC §5.2, §5.3 #5, §7)
-        effective_when = when_text
+        effective_when = clean_when
         effective_clock = None
-        if not (when_text or "").strip():
+        if not (clean_when or "").strip():
             if pending and pending.requested_when:
                 effective_when = pending.requested_when
                 effective_clock = pending.anchor_utc
@@ -182,6 +229,7 @@ class WeatherService:
         # 4. Query Planning (SPEC §8, §9)
         now_local = now_dt.astimezone(ZoneInfo(loc_tz))
         status = "ok"
+        from_cache = False
         current_snapshot = None
         data_kinds: List[str] = []
         weather_data: Dict[str, Any] = {
@@ -303,13 +351,25 @@ class WeatherService:
                             "target_kind": "forecast",
                         }
 
-        # Case A: Instant (now / fallback_now)
+        # Case A: Instant (now / fallback_now) with TTL cache and Single-Flight (SPEC §13.2)
         elif target.granularity == "instant":
             data_kinds = ["current"]
             if self.client and loc:
-                raw_current = await self.client.get_current_weather(lat=loc.lat, lon=loc.lon)
-                if raw_current:
-                    norm = normalize_current_weather(raw_current)
+                cache_key = f"current:{loc.lat:.2f}:{loc.lon:.2f}"
+                cached = self.cache.get(cache_key)
+                if cached:
+                    norm = cached
+                    from_cache = True
+                else:
+                    async def _fetch():
+                        raw = await self.client.get_current_weather(lat=loc.lat, lon=loc.lon)
+                        return normalize_current_weather(raw) if raw else None
+                    norm = await self.single_flight.execute(cache_key, _fetch)
+                    if norm:
+                        self.cache.set(cache_key, norm, TTLCache.TTL_CURRENT)
+                    from_cache = False
+
+                if norm:
                     current_snapshot = norm.to_dict()
                     weather_data = {
                         "condition": norm.condition,
@@ -323,12 +383,23 @@ class WeatherService:
                         "relevant_hours": [],
                     }
 
-        # Case B: Daily (today / tomorrow / +Nd)
+        # Case B: Daily (today / tomorrow / +Nd) with TTL cache and Single-Flight (SPEC §13.2)
         elif target.granularity == "daily":
             data_kinds = ["forecast_daily"]
             if self.client and loc:
-                raw_daily = await self.client.get_daily_forecast(lat=loc.lat, lon=loc.lon, days=7)
-                norm_daily = normalize_daily_forecast(raw_daily)
+                cache_key = f"daily:{loc.lat:.2f}:{loc.lon:.2f}:7"
+                cached = self.cache.get(cache_key)
+                if cached:
+                    norm_daily = cached
+                    from_cache = True
+                else:
+                    async def _fetch_d():
+                        raw = await self.client.get_daily_forecast(lat=loc.lat, lon=loc.lon, days=7)
+                        return normalize_daily_forecast(raw)
+                    norm_daily = await self.single_flight.execute(cache_key, _fetch_d)
+                    if norm_daily:
+                        self.cache.set(cache_key, norm_daily, TTLCache.TTL_DAILY)
+                    from_cache = False
 
                 target_date_str = target.start_local[:10]
                 matching_day = next((d for d in norm_daily if d.date == target_date_str), None)
@@ -345,12 +416,23 @@ class WeatherService:
                         "relevant_hours": [],
                     }
 
-        # Case C: Hourly (dayparts / specific hours / intervals)
+        # Case C: Hourly (dayparts / specific hours / intervals) with TTL cache and Single-Flight (SPEC §13.2)
         elif target.granularity == "hourly":
             data_kinds = ["forecast_hourly"]
             if self.client and loc:
-                raw_hourly = await self.client.get_hourly_forecast(lat=loc.lat, lon=loc.lon, hours=24)
-                norm_hourly = normalize_hourly_forecast(raw_hourly, tz_name=loc_tz)
+                cache_key = f"hourly:{loc.lat:.2f}:{loc.lon:.2f}:24:{loc_tz}"
+                cached = self.cache.get(cache_key)
+                if cached:
+                    norm_hourly = cached
+                    from_cache = True
+                else:
+                    async def _fetch_h():
+                        raw = await self.client.get_hourly_forecast(lat=loc.lat, lon=loc.lon, hours=24)
+                        return normalize_hourly_forecast(raw, tz_name=loc_tz)
+                    norm_hourly = await self.single_flight.execute(cache_key, _fetch_h)
+                    if norm_hourly:
+                        self.cache.set(cache_key, norm_hourly, TTLCache.TTL_HOURLY)
+                    from_cache = False
 
                 # Filter hours in [target.start_local, target.end_local)
                 relevant = [
@@ -388,7 +470,7 @@ class WeatherService:
             },
             "query": {
                 "focus": focus,
-                "normalized_when": target.semantic or (when_text or "now"),
+                "normalized_when": target.semantic or (clean_when or "now"),
                 "time_resolution": resolution.to_dict(),
                 "target_start_local": target.start_local,
                 "target_end_local": target.end_local,
@@ -398,7 +480,7 @@ class WeatherService:
             "current_snapshot": current_snapshot,
             "comparison": comparison_dict,
             "warnings": warnings,
-            "from_cache": False,
+            "from_cache": from_cache,
         }
 
         if focus == "clothing":

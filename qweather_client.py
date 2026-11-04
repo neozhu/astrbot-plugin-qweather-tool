@@ -6,6 +6,15 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+class QWeatherError(Exception):
+    """Categorized QWeather exception without sensitive credential details."""
+
+    def __init__(self, error_code: str, message: str = ""):
+        self.error_code = error_code
+        self.message = message
+        super().__init__(f"[{error_code}] {message}")
+
+
 class QWeatherClient:
     """HTTP client for QWeather API services conforming to SPEC-v1.3 §10."""
 
