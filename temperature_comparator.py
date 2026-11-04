@@ -1,5 +1,8 @@
 from typing import Any, Dict, List, Optional
-from location_resolver import ResolvedLocation
+try:
+    from .location_resolver import ResolvedLocation
+except (ImportError, ValueError):
+    from location_resolver import ResolvedLocation
 
 
 class TemperatureComparator:

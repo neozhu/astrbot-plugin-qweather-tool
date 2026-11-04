@@ -1,10 +1,20 @@
 import json
+from pathlib import Path
+import sys
 from typing import Any, Dict
+
+# Ensure plugin directory is in sys.path so intra-plugin imports always resolve
+_PLUGIN_DIR = str(Path(__file__).resolve().parent)
+if _PLUGIN_DIR not in sys.path:
+    sys.path.insert(0, _PLUGIN_DIR)
 
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
 
-from weather_service import WeatherService
+try:
+    from .weather_service import WeatherService
+except (ImportError, ValueError):
+    from weather_service import WeatherService
 
 
 @register(

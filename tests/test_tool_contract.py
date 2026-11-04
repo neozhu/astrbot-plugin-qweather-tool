@@ -169,3 +169,38 @@ async def test_lifecycle_terminate_cleans_resources():
 
     # Calling terminate should execute cleanly without unhandled exceptions
     await plugin.terminate()
+
+
+def test_plugin_package_loading_isolated_sys_path():
+    """Verify plugin can be imported as an AstrBot package (data.plugins.xxx.main)
+    even when plugin directory is not pre-existing in sys.path.
+    Prevents regression of 'No module named weather_service'.
+    """
+    import sys
+    from importlib.util import spec_from_file_location, module_from_spec
+
+    plugin_root = ROOT_DIR
+    orig_sys_path = list(sys.path)
+
+    try:
+        # Strip plugin_root from sys.path
+        sys.path = [p for p in sys.path if Path(p).resolve() != plugin_root]
+
+        pkg_module_name = "data.plugins.astrbot_plugin_qweather_tool.main"
+        spec = spec_from_file_location(
+            pkg_module_name,
+            str(plugin_root / "main.py"),
+            submodule_search_locations=[str(plugin_root)],
+        )
+        assert spec is not None
+        assert spec.loader is not None
+
+        mod = module_from_spec(spec)
+        sys.modules[pkg_module_name] = mod
+        spec.loader.exec_module(mod)
+
+        # Verify QWeatherPlugin was loaded successfully
+        assert hasattr(mod, "QWeatherPlugin")
+    finally:
+        sys.path = orig_sys_path
+        sys.modules.pop("data.plugins.astrbot_plugin_qweather_tool.main", None)

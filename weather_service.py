@@ -5,17 +5,30 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
 
-from cache import SingleFlight, TTLCache
-from location_resolver import LocationResolver, ResolvedLocation
-from qweather_client import QWeatherClient, QWeatherError
-from temperature_comparator import TemperatureComparator
-from time_resolver import TimeResolver
-from weather_context import WeatherContextStore
-from weather_models import (
-    normalize_current_weather,
-    normalize_daily_forecast,
-    normalize_hourly_forecast,
-)
+try:
+    from .cache import SingleFlight, TTLCache
+    from .location_resolver import LocationResolver, ResolvedLocation
+    from .qweather_client import QWeatherClient, QWeatherError
+    from .temperature_comparator import TemperatureComparator
+    from .time_resolver import TimeResolver
+    from .weather_context import WeatherContextStore
+    from .weather_models import (
+        normalize_current_weather,
+        normalize_daily_forecast,
+        normalize_hourly_forecast,
+    )
+except (ImportError, ValueError):
+    from cache import SingleFlight, TTLCache
+    from location_resolver import LocationResolver, ResolvedLocation
+    from qweather_client import QWeatherClient, QWeatherError
+    from temperature_comparator import TemperatureComparator
+    from time_resolver import TimeResolver
+    from weather_context import WeatherContextStore
+    from weather_models import (
+        normalize_current_weather,
+        normalize_daily_forecast,
+        normalize_hourly_forecast,
+    )
 
 FOCUS_ALIASES = {
     "general": ["general", "综合", "综合天气", "概况", "天气"],

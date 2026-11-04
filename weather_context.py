@@ -2,8 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
-from location_resolver import ResolvedLocation
-from time_resolver import TargetPeriod
+try:
+    from .location_resolver import ResolvedLocation
+    from .time_resolver import TargetPeriod
+except (ImportError, ValueError):
+    from location_resolver import ResolvedLocation
+    from time_resolver import TargetPeriod
 
 # SPEC §5.2: confirmed location TTL 7 days, topic context TTL 60 minutes
 LOCATION_TTL_SECONDS = 7 * 24 * 3600
