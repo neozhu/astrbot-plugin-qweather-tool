@@ -1,0 +1,29 @@
+{
+  "code": "200",
+  "location": [
+    {
+      "name": "昆山区",
+      "id": "101190410",
+      "lat": "31.40",
+      "lon": "120.95",
+      "adm2": "某市",
+      "adm1": "某省",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "18"
+    },
+    {
+      "name": "昆山",
+      "id": "101190404",
+      "lat": "31.3846",
+      "lon": "120.9813",
+      "adm2": "苏州市",
+      "adm1": "江苏省",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "32"
+    }
+  ]
+}
