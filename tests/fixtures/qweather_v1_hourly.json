@@ -1,0 +1,30 @@
+{
+  "code": "200",
+  "updateTime": "2026-11-04T12:00:00+08:00",
+  "hourly": [
+    {
+      "forecastTime": "2026-11-05T06:00:00+08:00",
+      "temperature": {"value": "11.0"},
+      "feelsLike": {"value": "9.5"},
+      "condition": {"text": "小雨"},
+      "wind": {"speed": {"value": "3.8"}},
+      "precipitation": {"amount": {"value": "0.5"}, "probability": "31"}
+    },
+    {
+      "forecastTime": "2026-11-05T07:00:00+08:00",
+      "temperature": {"value": "11.5"},
+      "feelsLike": {"value": "10.0"},
+      "condition": {"text": "小雨"},
+      "wind": {"speed": {"value": "4.2"}},
+      "precipitation": {"amount": {"value": "0.8"}, "probability": "35"}
+    },
+    {
+      "forecastTime": "2026-11-05T08:00:00+08:00",
+      "temperature": {"value": "12.5"},
+      "feelsLike": {"value": "11.0"},
+      "condition": {"text": "阴"},
+      "wind": {"speed": {"value": "3.5"}},
+      "precipitation": {"amount": {"value": "0.0"}, "probability": "20"}
+    }
+  ]
+}

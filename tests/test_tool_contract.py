@@ -46,7 +46,10 @@ def test_metadata_yaml_structure():
     assert isinstance(meta, dict), "metadata.yaml must be a valid mapping"
     assert "name" in meta
     assert "version" in meta
-    assert "description" in meta
+    assert "author" in meta
+    assert "repo" in meta
+    assert "display_name" in meta
+    assert "desc" in meta or "description" in meta
 
 
 def test_single_get_weather_tool_registered():

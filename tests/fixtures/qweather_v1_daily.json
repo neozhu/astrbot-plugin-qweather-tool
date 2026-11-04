@@ -1,0 +1,26 @@
+{
+  "code": "200",
+  "updateTime": "2026-11-04T12:00:00+08:00",
+  "daily": [
+    {
+      "fxDate": "2026-11-04",
+      "forecastStartTime": "2026-11-04T08:00:00+08:00",
+      "forecastEndTime": "2026-11-05T08:00:00+08:00",
+      "temperatureMax": {"value": "22.0", "unit": "C"},
+      "temperatureMin": {"value": "13.0", "unit": "C"},
+      "daytime": {"condition": {"text": "多云", "code": "101"}, "wind": {"speed": {"value": "3.5"}}},
+      "nighttime": {"condition": {"text": "晴", "code": "100"}, "wind": {"speed": {"value": "2.1"}}},
+      "precipitation": {"amount": {"value": "0.0"}}
+    },
+    {
+      "fxDate": "2026-11-05",
+      "forecastStartTime": "2026-11-05T08:00:00+08:00",
+      "forecastEndTime": "2026-11-06T08:00:00+08:00",
+      "temperatureMax": {"value": "19.0", "unit": "C"},
+      "temperatureMin": {"value": "10.0", "unit": "C"},
+      "daytime": {"condition": {"text": "小雨", "code": "305"}, "wind": {"speed": {"value": "4.0"}}},
+      "nighttime": {"condition": {"text": "阴", "code": "104"}, "wind": {"speed": {"value": "3.0"}}},
+      "precipitation": {"amount": {"value": "3.5"}}
+    }
+  ]
+}

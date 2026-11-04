@@ -1,0 +1,29 @@
+{
+  "code": "200",
+  "location": [
+    {
+      "name": "朝阳",
+      "id": "2001",
+      "lat": "39.92",
+      "lon": "116.44",
+      "adm2": "北京",
+      "adm1": "北京市",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "20"
+    },
+    {
+      "name": "朝阳",
+      "id": "2002",
+      "lat": "41.57",
+      "lon": "120.45",
+      "adm2": "朝阳市",
+      "adm1": "辽宁省",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "25"
+    }
+  ]
+}

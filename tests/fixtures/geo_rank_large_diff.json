@@ -1,0 +1,29 @@
+{
+  "code": "200",
+  "location": [
+    {
+      "name": "某地",
+      "id": "1001",
+      "lat": "30.00",
+      "lon": "110.00",
+      "adm2": "甲市",
+      "adm1": "甲省",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "20"
+    },
+    {
+      "name": "某地",
+      "id": "1002",
+      "lat": "31.00",
+      "lon": "111.00",
+      "adm2": "乙市",
+      "adm1": "乙省",
+      "country": "中国",
+      "tz": "Asia/Shanghai",
+      "type": "city",
+      "rank": "40"
+    }
+  ]
+}
