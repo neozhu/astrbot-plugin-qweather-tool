@@ -15,7 +15,7 @@
 
 - **单一公开 Tool（The Single Seam）**：仅向 AstrBot 注册唯一公开 LLM 工具 `@filter.llm_tool(name="get_weather")`，入参严格收敛为 `(location, when, focus)`。无多余路由 Agent、关键词消息拦截器或第二个决策 AI。
 - **原生 LLM 自然作答**：插件仅负责采集并组装“客观天气事实”，自然回复由当前 AstrBot 宿主 LLM 统一生成，完全保留宿主原有的人设、语气与个性风格。
-- **零消息副反应**：插件绝不直接调用 `event.send()` 发送消息，仅通过 `yield event.plain_result(json)` 契约将结构化事实交还给 Agent。
+- **零消息副反应**：工具直接返回 JSON 字符串，将结构化事实交还给 Agent 生成最终回答；不使用会触发框架直接发送消息的 `event.plain_result()`，也不调用 `event.send()`。
 - **零供应商侵入**：微信端最终回复绝不自动追加任何天气服务商名称、官网链接或宣传尾注。
 - **严禁虚构天气**：缺少数据或历史未授权时坦诚降级并返回机器可读 warning，绝不拼凑伪造温度或将缺失降雨概率当成 0。
 

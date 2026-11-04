@@ -95,11 +95,21 @@ def test_single_get_weather_tool_registered():
 
 
 @pytest.mark.asyncio
-async def test_tool_invocation_yields_plain_result_without_event_send():
-    """SPEC §0.2, §4.3, §11.1:
-    get_weather must yield event.plain_result(json_str) as Tool Result,
-    and MUST NEVER call event.send() directly.
-    """
+@pytest.mark.parametrize("focus,status", [
+    ("general", "ok"),
+    ("rain", "ok"),
+    ("rain", "need_location"),
+    ("rain", "partial"),
+    ("rain", "api_error"),
+])
+async def test_tool_invocation_returns_json_to_agent_without_sending(focus, status):
+    """The real executor must receive facts, without sending a direct message."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from astrbot.api.event import AstrMessageEvent
+    from astrbot.core.agent.run_context import ContextWrapper
+    from astrbot.core.agent.tool import FunctionTool
+    from astrbot.core.astr_agent_tool_exec import FunctionToolExecutor
     from main import QWeatherPlugin
 
     class DummyContext:
@@ -110,12 +120,18 @@ async def test_tool_invocation_yields_plain_result_without_event_send():
             self.send_called = False
             self.unified_msg_origin = "test_origin"
             self.session_id = "test_session"
+            self._result = None
 
         async def send(self, *args, **kwargs):
             self.send_called = True
 
-        def plain_result(self, content: str):
-            return {"type": "plain_result", "content": content}
+        plain_result = AstrMessageEvent.plain_result
+
+        def set_result(self, result):
+            self._result = result
+
+        def get_result(self):
+            return self._result
 
     mock_context = DummyContext()
     config = {
@@ -124,28 +140,25 @@ async def test_tool_invocation_yields_plain_result_without_event_send():
         "default_city": "昆山",
     }
     plugin = QWeatherPlugin(mock_context, config=config)
-
+    payload = {"status": status, "location": {"name": "昆山"}, "focus": focus}
+    plugin.weather_service.query = AsyncMock(return_value=payload)
     event = DummyEvent()
-    results = []
-
-    # get_weather is an async generator yielding results
-    gen = plugin.get_weather(event, location="昆山", when="today", focus="general")
-    async for item in gen:
-        results.append(item)
-
-    # Must yield at least one result
-    assert len(results) >= 1, "get_weather must yield at least one result"
-    result = results[0]
-
-    # Verify event.send was NEVER called
-    assert event.send_called is False, "get_weather must never call event.send() directly"
-
-    # Verify result format
-    assert isinstance(result, dict)
-    assert result.get("type") == "plain_result"
-    payload = json.loads(result.get("content"))
-    assert "status" in payload
-    assert payload["status"] in ["ok", "need_location", "ambiguous_location", "partial", "fallback_now"]
+    tool = FunctionTool(
+        name="get_weather", description="天气", parameters={"type": "object"},
+        handler=plugin.get_weather,
+    )
+    run_context = ContextWrapper(context=SimpleNamespace(event=event))
+    try:
+        results = [result async for result in FunctionToolExecutor.execute(
+            tool, run_context, location="昆山", when="today", focus=focus,
+        )]
+        assert event.send_called is False, "executor must not send raw weather JSON"
+        assert event.get_result() is None
+        assert len(results) == 1
+        assert results[0] is not None, "None would terminate the Agent loop"
+        assert json.loads(results[0].content[0].text) == payload
+    finally:
+        await plugin.terminate()
 
 
 @pytest.mark.asyncio

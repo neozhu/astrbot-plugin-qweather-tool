@@ -111,7 +111,7 @@ class QWeatherPlugin(Star):
         location: str,
         when: str,
         focus: str,
-    ):
+    ) -> str:
         """为自然聊天提供真实天气事实，最终回答由当前 AstrBot LLM 生成。
 
         用户明确查天气、需要温差比较、询问依赖天气的穿衣/户外/洗车建议，
@@ -149,7 +149,7 @@ class QWeatherPlugin(Star):
             when_text=when,
             focus_text=focus,
         )
-        yield event.plain_result(json.dumps(result, ensure_ascii=False))
+        return json.dumps(result, ensure_ascii=False)
 
     async def _parse_request_body(self) -> Dict[str, Any]:
         """Safely parse JSON or query params from AstrBot or Quart request."""

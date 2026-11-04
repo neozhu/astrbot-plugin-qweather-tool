@@ -255,10 +255,10 @@ async def get_weather(
         when_text=when,
         focus_text=focus,
     )
-    yield event.plain_result(json.dumps(result, ensure_ascii=False))
+    return json.dumps(result, ensure_ascii=False)
 ```
 
-> 示例需补齐 AstrBot 实际版本的 import、配置注入和构造。`event.plain_result()` 只作为 Tool Result 回到 Agent，绝不另外发送微信消息；需要验证目标版本 AstrBot docstring 解析格式及 `@filter.llm_tool` 行为。
+> 工具必须直接返回 JSON 字符串作为 Tool Result，让当前 Agent 继续生成最终回答。在 AstrBot 4.29.4 中，`yield event.plain_result()` 会被执行器作为直接消息发送，并向 Agent 返回 `None`、结束循环，因此不能用于传递天气事实。示例需补齐 AstrBot 实际版本的 import、配置注入和构造，并验证 docstring 解析格式及 `@filter.llm_tool` 行为。
 
 ### 4.4 参数规范化示例
 
