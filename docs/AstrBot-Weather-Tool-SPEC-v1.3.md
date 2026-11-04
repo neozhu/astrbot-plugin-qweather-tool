@@ -1,6 +1,6 @@
 # AstrBot QWeather Conversation Plugin — SPEC.md
 
-> **项目名称**：`astrbot_plugin_qweather`  
+> **项目名称**：`astrbot_plugin_qweather_tool`  
 > **版本**：v1.3（完整开发基线：LLM 参数半结构化 + 无法确认时间默认现在）  
 > **日期**：2026-11-04  
 > **适用场景**：AstrBot + `astrbot-plugin-wechat-native` + `agent-wechat-native`；微信私聊与群聊 `@机器人`  
