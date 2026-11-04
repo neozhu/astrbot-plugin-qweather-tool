@@ -151,9 +151,10 @@ def normalize_daily_forecast(daily_list: List[Dict[str, Any]]) -> List[Normalize
             amount_dict = precip_dict.get("amount", {})
             precip_mm = _parse_float(amount_dict.get("value") if isinstance(amount_dict, dict) else amount_dict)
 
+        raw_date = d.get("fxDate") or str(d.get("forecastStartTime", ""))[:10]
         results.append(
             NormalizedDailyForecast(
-                date=str(d.get("fxDate", "")),
+                date=str(raw_date),
                 temperature_max_c=max_val,
                 temperature_min_c=min_val,
                 condition_day=day_cond,

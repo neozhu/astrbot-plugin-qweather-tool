@@ -1,8 +1,11 @@
 import datetime
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple
+from zoneinfo import ZoneInfo
 
 from location_resolver import LocationResolver, ResolvedLocation
 from qweather_client import QWeatherClient
+from temperature_comparator import TemperatureComparator
 from time_resolver import TimeResolver
 from weather_context import WeatherContextStore
 from weather_models import (
@@ -51,6 +54,7 @@ class WeatherService:
         self.location_resolver = LocationResolver(self.client)
         self.time_resolver = TimeResolver()
         self.context_store = WeatherContextStore()
+        self.comparator = TemperatureComparator()
 
     def _is_group_event(self, event: Any) -> bool:
         """Detect whether the current message origin is a group chat."""
@@ -175,7 +179,9 @@ class WeatherService:
         if resolution.status == "fallback_now" and resolution.reason == "unrecognized_explicit_time":
             warnings.append("time_fallback_now")
 
-        # 4. Query Planning (SPEC §8)
+        # 4. Query Planning (SPEC §8, §9)
+        now_local = now_dt.astimezone(ZoneInfo(loc_tz))
+        status = "ok"
         current_snapshot = None
         data_kinds: List[str] = []
         weather_data: Dict[str, Any] = {
@@ -189,9 +195,116 @@ class WeatherService:
             "precipitation_mm": None,
             "relevant_hours": [],
         }
+        comparison_dict: Dict[str, Any] = {
+            "available": False,
+            "reason": "insufficient_comparable_data",
+        }
+
+        # Check past hour protection (SPEC §8.1, §9.3, C48)
+        if target.granularity == "hourly" and target.end_local <= now_local.isoformat():
+            warnings.append("past_hour_unsupported")
+            status = "partial"
+
+        # Case 0: Comparison query (when baseline is present) (SPEC §9.2, §9.3)
+        elif time_res.baseline is not None:
+            baseline = time_res.baseline
+
+            # Subcase 0.1: Instant vs Yesterday (SPEC §9.2 #5, §10.2, C18, C47)
+            if baseline.semantic == "yesterday" and (target.semantic == "now" or target.granularity == "instant"):
+                data_kinds = ["current"]
+                target_kind = "current"
+                baseline_kind = "historical_reanalysis"
+
+                raw_current = await self.client.get_current_weather(lat=loc.lat, lon=loc.lon) if (self.client and loc) else None
+                yesterday_date_str = (now_local.date() - timedelta(days=1)).strftime("%Y%m%d")
+                raw_historical = await self.client.get_historical_weather(location_id=loc.id, date_str=yesterday_date_str) if (self.client and loc) else None
+
+                if raw_current:
+                    norm = normalize_current_weather(raw_current)
+                    current_snapshot = norm.to_dict()
+                    weather_data = {
+                        "condition": norm.condition,
+                        "temperature_c": norm.temperature_c,
+                        "feels_like_c": norm.feels_like_c,
+                        "temperature_min_c": None,
+                        "temperature_max_c": None,
+                        "wind_speed_ms": norm.wind_speed_ms,
+                        "precipitation_probability": None,
+                        "precipitation_mm": norm.precipitation_mm,
+                        "relevant_hours": [],
+                    }
+
+                if raw_historical is None:
+                    # SPEC §8.4, §10.3, §11.2, C19: Graceful downgrade on Historical 401/403/unavailable
+                    status = "partial"
+                    warnings.append("historical_not_entitled")
+                    comparison_dict = {
+                        "available": False,
+                        "reason": "historical_not_entitled",
+                    }
+                else:
+                    data_kinds.append("historical_reanalysis")
+                    hourly_list = raw_historical.get("weatherHourly", [])
+                    target_hour_str = f"{now_local.hour:02d}:00"
+                    matched_hour = next((h for h in hourly_list if h.get("time", "").endswith(target_hour_str)), None)
+                    if not matched_hour and hourly_list:
+                        matched_hour = hourly_list[0]
+
+                    if matched_hour and raw_current and norm.temperature_c is not None:
+                        b_temp = float(matched_hour.get("temp", 0.0))
+                        t_temp = float(norm.temperature_c)
+                        delta_info = self.comparator.compute_delta(t_temp, b_temp)
+                        comparison_dict = {
+                            "available": True,
+                            "baseline_temp_c": b_temp,
+                            "target_temp_c": t_temp,
+                            "delta_temp_c": delta_info["delta_temp_c"],
+                            "change_magnitude": delta_info["change_magnitude"],
+                            "aggregation": "mean_hourly",
+                            "baseline_kind": baseline_kind,
+                            "target_kind": target_kind,
+                        }
+
+            # Subcase 0.2: Daily vs Daily (SPEC §9.3, C17, C56)
+            elif target.granularity == "daily" and baseline.granularity == "daily":
+                data_kinds = ["forecast_daily"]
+                if self.client and loc:
+                    raw_daily = await self.client.get_daily_forecast(lat=loc.lat, lon=loc.lon, days=7)
+                    norm_daily = normalize_daily_forecast(raw_daily)
+
+                    t_date_str = target.start_local[:10]
+                    b_date_str = baseline.start_local[:10]
+                    matching_t = next((d for d in norm_daily if d.date == t_date_str), None)
+                    matching_b = next((d for d in norm_daily if d.date == b_date_str), None)
+
+                    if matching_t:
+                        weather_data = {
+                            "condition": matching_t.condition_day or matching_t.condition_night,
+                            "temperature_c": None,
+                            "feels_like_c": None,
+                            "temperature_min_c": matching_t.temperature_min_c,
+                            "temperature_max_c": matching_t.temperature_max_c,
+                            "wind_speed_ms": None,
+                            "precipitation_probability": None,
+                            "precipitation_mm": matching_t.precipitation_mm,
+                            "relevant_hours": [],
+                        }
+
+                    if matching_t and matching_b and matching_t.temperature_max_c is not None and matching_b.temperature_max_c is not None:
+                        delta_info = self.comparator.compute_delta(matching_t.temperature_max_c, matching_b.temperature_max_c)
+                        comparison_dict = {
+                            "available": True,
+                            "baseline_temp_c": matching_b.temperature_max_c,
+                            "target_temp_c": matching_t.temperature_max_c,
+                            "delta_temp_c": delta_info["delta_temp_c"],
+                            "change_magnitude": delta_info["change_magnitude"],
+                            "aggregation": "daily_max",
+                            "baseline_kind": "forecast",
+                            "target_kind": "forecast",
+                        }
 
         # Case A: Instant (now / fallback_now)
-        if target.granularity == "instant":
+        elif target.granularity == "instant":
             data_kinds = ["current"]
             if self.client and loc:
                 raw_current = await self.client.get_current_weather(lat=loc.lat, lon=loc.lon)
@@ -263,8 +376,8 @@ class WeatherService:
 
         now_utc = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        return {
-            "status": "ok",
+        res_payload = {
+            "status": status,
             "source": {
                 "data_kinds": data_kinds,
                 "retrieved_at_utc": now_utc,
@@ -283,13 +396,18 @@ class WeatherService:
             },
             "weather": weather_data,
             "current_snapshot": current_snapshot,
-            "comparison": {
-                "available": False,
-                "reason": "insufficient_comparable_data",
-            },
+            "comparison": comparison_dict,
             "warnings": warnings,
             "from_cache": False,
         }
+
+        if focus == "clothing":
+            res_payload["clothing_evidence"] = self.comparator.build_clothing_evidence(
+                weather_data=weather_data,
+                comparison=comparison_dict,
+            )
+
+        return res_payload
 
     async def close(self) -> None:
         """Release underlying HTTP client / connections."""

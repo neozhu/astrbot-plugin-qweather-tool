@@ -173,6 +173,37 @@ class QWeatherClient:
             logger.error(f"Hourly forecast request error: {e}")
             return []
 
+    async def get_historical_weather(
+        self,
+        location_id: str,
+        date_str: str,
+        lang: str = "zh",
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch historical weather from /v7/historical/weather?location={location_id}&date={yyyyMMdd} (SPEC §10.2, §10.5)."""
+        url = f"{self.api_host}/v7/historical/weather"
+        params: Dict[str, Any] = {
+            "location": str(location_id),
+            "date": str(date_str),
+            "lang": lang,
+        }
+
+        client = self._get_client()
+        try:
+            resp = await client.get(url, params=params, headers=self._build_headers())
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("code") == "200":
+                    return data
+                logger.warning(f"QWeather historical API returned code={data.get('code')}")
+                return None
+            elif resp.status_code in (401, 403):
+                logger.warning(f"QWeather historical API unauthorized: status={resp.status_code}")
+                return None
+            return None
+        except Exception as e:
+            logger.error(f"Historical weather request error: {e}")
+            return None
+
     async def close(self) -> None:
         """Close underlying HTTP client."""
         if self._client and not self._client.is_closed:
