@@ -57,3 +57,26 @@ test('opening outside the Dashboard explains how to access the view', async () =
   assert.match(page.get('status-hint').textContent, /AstrBot.*插件.*视图/);
   assert.equal(page.get('test-button').disabled, false);
 });
+
+test('network failures identify the Dashboard connection rather than the weather key', async () => {
+  const page = mount({
+    async ready() {},
+    async apiPost() { throw new TypeError('Failed to fetch'); },
+  });
+  await page.click();
+  assert.match(page.get('status-hint').textContent, /AstrBot.*后端/);
+  assert.equal(page.get('test-button').disabled, false);
+});
+
+test('ambiguous cities show an actionable explanation', async () => {
+  const page = mount({
+    async ready() {},
+    async apiPost() { return { success: false, result: {
+      status: 'ambiguous_location', candidates: [{ name: '苏州' }, { name: '昆山' }],
+    } }; },
+  });
+  await page.click();
+  assert.equal(page.get('status').textContent, '城市需要确认');
+  assert.match(page.get('status-hint').textContent, /苏州、昆山/);
+  assert.equal(page.get('result-details').hidden, false);
+});
