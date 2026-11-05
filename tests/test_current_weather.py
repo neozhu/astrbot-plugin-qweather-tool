@@ -7,6 +7,29 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["current", "daily", "hourly"])
+async def test_v1_client_reads_unwrapped_response(kind, current_v1_data):
+    """v1 uses root weather fields, days and hours, without a code/now wrapper."""
+    import httpx
+    from qweather_client import QWeatherClient
+
+    current = current_v1_data["now"]
+    daily = [{"forecastStartTime": "2026-11-05T07:00+08:00", "temperatureMax": {"value": 22}}]
+    hourly = [{"forecastTime": "2026-11-05T08:00+08:00", "temperature": {"value": 18}}]
+    payload = {"current": current, "daily": {"days": daily}, "hourly": {"hours": hourly}}[kind]
+    expected = {"current": current, "daily": daily, "hourly": hourly}[kind]
+    client = QWeatherClient(api_host="test.qweatherapi.com", api_key="test_key")
+    client._client = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json=payload)
+    ))
+    try:
+        result = await getattr(client, f"get_{'current_weather' if kind == 'current' else kind + '_forecast'}")(31.38, 120.98)
+        assert result == expected
+    finally:
+        await client.close()
+
+
 @pytest.fixture
 def current_v1_data():
     with open(FIXTURES_DIR / "qweather_v1_current.json", "r", encoding="utf-8") as f:

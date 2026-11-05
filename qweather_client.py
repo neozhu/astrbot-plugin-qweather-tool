@@ -110,9 +110,9 @@ class QWeatherClient:
             resp = await client.get(url, params=params, headers=self._build_headers())
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get("code") == "200":
-                    return data.get("now", {})
-                logger.warning(f"QWeather current API returned code={data.get('code')}")
+                if isinstance(data, dict) and "temperature" in data:
+                    return data
+                logger.warning("QWeather current API returned no weather data")
                 return {}
             logger.warning(f"QWeather current API HTTP error: status={resp.status_code}")
             return {}
@@ -142,10 +142,7 @@ class QWeatherClient:
             resp = await client.get(url, params=params, headers=self._build_headers())
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get("code") == "200":
-                    return data.get("daily", [])
-                logger.warning(f"QWeather daily API returned code={data.get('code')}")
-                return []
+                return data.get("days", [])
             return []
         except Exception as e:
             logger.error(f"Daily forecast request error: {e}")
@@ -173,10 +170,7 @@ class QWeatherClient:
             resp = await client.get(url, params=params, headers=self._build_headers())
             if resp.status_code == 200:
                 data = resp.json()
-                if data.get("code") == "200":
-                    return data.get("hourly", [])
-                logger.warning(f"QWeather hourly API returned code={data.get('code')}")
-                return []
+                return data.get("hours", [])
             return []
         except Exception as e:
             logger.error(f"Hourly forecast request error: {e}")
