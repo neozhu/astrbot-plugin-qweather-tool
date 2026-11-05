@@ -2,6 +2,7 @@ import asyncio
 import inspect
 import json
 from pathlib import Path
+import re
 import sys
 import time
 from typing import Any, Dict
@@ -13,6 +14,7 @@ if _PLUGIN_DIR not in sys.path:
 
 import aiohttp
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.message_components import Plain
 from astrbot.api.star import Context, Star, register
 
 try:
@@ -56,6 +58,20 @@ except ImportError:
         request = None
 
 PLUGIN_NAME = "astrbot_plugin_qweather_tool"
+_PLAIN_TEXT_REPLY = "qweather_plain_text_reply"
+_WECHAT_PLATFORMS = {"wechat_native", "weixin_oc", "weixin_official_account", "wecom", "wecom_ai_bot"}
+
+
+def strip_weather_markdown(text: str) -> str:
+    """Remove common weather-answer formatting without flattening line breaks."""
+    text = re.sub(r"(?m)^[ \t]*```[^\n]*\n?", "", text)
+    text = re.sub(r"(?m)^[ \t]*([*_-])(?:[ \t]*\1){2,}[ \t]*$", "", text)
+    text = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+", "", text)
+    text = re.sub(r"(\*\*|__|~~)(.+?)\1", r"\2", text, flags=re.DOTALL)
+    text = re.sub(r"(?<![A-Za-z0-9*])\*(?=\S)([^*\n]*?\S)\*(?![A-Za-z0-9*])", r"\1", text)
+    text = re.sub(r"(?<!\w)_(?=\S)([^_\n]*?\S)_(?!\w)", r"\1", text)
+    text = re.sub(r"`([^`\n]+)`", r"\1", text)
+    return re.sub(r"(?m)^([ \t]*)[-+*][ \t]+", r"\1• ", text)
 
 
 @register(
@@ -149,7 +165,38 @@ class QWeatherPlugin(Star):
             when_text=when,
             focus_text=focus,
         )
+        if getattr(event, "get_platform_name", lambda: "")() in _WECHAT_PLATFORMS:
+            event.set_extra(_PLAIN_TEXT_REPLY, True)
+            result = {
+                **result,
+                "response_guidance": "请用微信纯文本回答，不使用 Markdown 粗体、斜体、标题、表格或代码块；用短句和换行组织内容。",
+            }
         return json.dumps(result, ensure_ascii=False)
+
+    @filter.on_decorating_result()
+    async def format_wechat_weather_reply(self, event: AstrMessageEvent):
+        if not event.get_extra(_PLAIN_TEXT_REPLY, False):
+            return
+        result = event.get_result()
+        if result:
+            for component in result.chain or []:
+                if isinstance(component, Plain):
+                    component.text = strip_weather_markdown(component.text)
+
+    @filter.on_using_llm_tool()
+    async def format_wechat_weather_tool_message(self, event: AstrMessageEvent, tool, tool_args):
+        if not event.get_extra(_PLAIN_TEXT_REPLY, False) or tool.name != "send_message_to_user":
+            return
+        if not isinstance(tool_args, dict):
+            return
+        if tool_args.get("session") not in (None, "", event.unified_msg_origin):
+            return
+        messages = tool_args.get("messages")
+        if not isinstance(messages, list):
+            return
+        for message in messages:
+            if isinstance(message, dict) and message.get("type") == "plain" and isinstance(message.get("text"), str):
+                message["text"] = strip_weather_markdown(message["text"])
 
     async def _parse_request_body(self) -> Dict[str, Any]:
         """Safely parse JSON or query params from AstrBot or Quart request."""

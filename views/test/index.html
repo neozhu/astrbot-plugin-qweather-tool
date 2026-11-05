@@ -127,7 +127,7 @@
     </section>
     <footer>测试不会修改插件配置，也不会发送聊天消息。</footer>
   </main>
-  <script>
+  <script type="module">
     const button = document.getElementById('test-button');
     const label = document.getElementById('button-label');
     const card = document.getElementById('test-card');
@@ -146,13 +146,10 @@
       details.open = false;
       result.textContent = '';
       try {
-        const response = await fetch('/api/plug/astrbot_plugin_qweather_tool/test-query', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ when: 'now', focus: 'general' })
-        });
-        if (!response.ok) throw new Error(`请求失败（HTTP ${response.status}）`);
-        const data = await response.json();
+        const bridge = window.AstrBotPluginView || window.AstrBotPluginPage;
+        if (!bridge) throw new Error('请从 AstrBot 控制台的插件详情中打开测试视图。');
+        await bridge.ready();
+        const data = await bridge.apiPost('test-query', { when: 'now', focus: 'general' });
         card.dataset.state = data.success ? 'success' : 'error';
         status.textContent = data.success ? '测试成功' : '测试未通过';
         hint.textContent = data.success ? '已成功获取当前天气，天气查询服务可用。' : '请检查插件配置，展开原始结果查看具体原因。';

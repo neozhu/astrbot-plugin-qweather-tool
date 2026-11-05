@@ -1,0 +1,109 @@
+import json
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+
+class Event:
+    def __init__(self, platform="wechat_native"):
+        self.platform = platform
+        self.extras = {}
+        self.unified_msg_origin = f"{platform}:FriendMessage:test"
+        self.result = None
+
+    def get_platform_name(self):
+        return self.platform
+
+    def set_extra(self, key, value):
+        self.extras[key] = value
+
+    def get_extra(self, key, default=None):
+        return self.extras.get(key, default)
+
+    def get_result(self):
+        return self.result
+
+
+@pytest.fixture
+def plugin():
+    from main import QWeatherPlugin
+
+    instance = QWeatherPlugin(object())
+    instance.weather_service.query = AsyncMock(return_value={"status": "ok"})
+    return instance
+
+
+@pytest.mark.parametrize("text,expected", [
+    ("***注意保暖***", "注意保暖"),
+    ("**昆山**\n****\n-2°C，降雨概率 0%", "昆山\n\n-2°C，降雨概率 0%"),
+    ("2*3*4；2 * 3 * 4；weather_current", "2*3*4；2 * 3 * 4；weather_current"),
+    ("```text\n气温 0°C\n```", "气温 0°C\n"),
+])
+def test_plain_text_preserves_values_and_literal_symbols(text, expected):
+    from main import strip_weather_markdown
+
+    assert strip_weather_markdown(text) == expected
+
+
+@pytest.mark.asyncio
+async def test_wechat_weather_result_requests_plain_text(plugin):
+    payload = json.loads(await plugin.get_weather(Event(), "昆山", "now", "general"))
+    assert payload["status"] == "ok"
+    assert "纯文本" in payload["response_guidance"]
+
+
+@pytest.mark.asyncio
+async def test_weather_reply_removes_markdown_and_preserves_message_components(plugin):
+    from astrbot.api.event import MessageEventResult
+    from astrbot.api.message_components import At, Plain
+
+    event = Event()
+    await plugin.get_weather(event, "昆山", "now", "general")
+    mention = At(qq="123", name="朋友")
+    event.result = MessageEventResult(chain=[
+        mention,
+        Plain("### **昆山天气**\n- **气温**：16～20°C\n- 体感 `18°C`，风速 3.2m/s\n建议：__带伞__，*薄外套*。"),
+    ])
+    await plugin.format_wechat_weather_reply(event)
+    assert event.result.chain[0] is mention
+    assert event.result.chain[1].text == "昆山天气\n• 气温：16～20°C\n• 体感 18°C，风速 3.2m/s\n建议：带伞，薄外套。"
+
+
+@pytest.mark.asyncio
+async def test_weather_direct_send_tool_is_also_plain_text(plugin):
+    event = Event()
+    await plugin.get_weather(event, "昆山", "today", "rain")
+    image = {"type": "image", "path": "/tmp/weather.png"}
+    args = {"session": "", "messages": [{"type": "plain", "text": "**今天有雨**，降雨概率 60%。"}, image]}
+    await plugin.format_wechat_weather_tool_message(event, SimpleNamespace(name="send_message_to_user"), args)
+    assert args["messages"][0]["text"] == "今天有雨，降雨概率 60%。"
+    assert args["messages"][1] is image
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform,weather_query", [("wechat_native", False), ("telegram", True)])
+async def test_other_replies_keep_their_format(plugin, platform, weather_query):
+    from astrbot.api.event import MessageEventResult
+    from astrbot.api.message_components import Plain
+
+    event = Event(platform)
+    if weather_query:
+        payload = json.loads(await plugin.get_weather(event, "昆山", "now", "general"))
+        assert "response_guidance" not in payload
+    event.result = MessageEventResult(chain=[Plain("**保留原文**")])
+    args = {"messages": [{"type": "plain", "text": "**保留原文**"}]}
+    await plugin.format_wechat_weather_reply(event)
+    await plugin.format_wechat_weather_tool_message(event, SimpleNamespace(name="send_message_to_user"), args)
+    assert event.result.chain[0].text == "**保留原文**"
+    assert args["messages"][0]["text"] == "**保留原文**"
+
+
+@pytest.mark.asyncio
+async def test_other_tool_arguments_and_other_sessions_are_untouched(plugin):
+    event = Event()
+    await plugin.get_weather(event, "昆山", "now", "general")
+    for name, session in [("other_tool", ""), ("send_message_to_user", "telegram:FriendMessage:other")]:
+        args = {"session": session, "messages": [{"type": "plain", "text": "**保留原文**"}]}
+        await plugin.format_wechat_weather_tool_message(event, SimpleNamespace(name=name), args)
+        assert args["messages"][0]["text"] == "**保留原文**"
