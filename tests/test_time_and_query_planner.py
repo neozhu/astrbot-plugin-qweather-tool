@@ -8,6 +8,30 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
+@pytest.mark.asyncio
+async def test_utc_hourly_forecast_is_selected_in_local_requested_hour():
+    from weather_service import WeatherService
+    from location_resolver import ResolvedLocation
+
+    service = WeatherService(api_host="test.qweatherapi.com", api_key="test-key")
+    service.time_resolver.clock = lambda: datetime(2026, 11, 5, 0, 30, tzinfo=timezone.utc)
+    location = ResolvedLocation("101190404", "昆山", "江苏", "苏州", "中国", 31.38, 120.98, "Asia/Shanghai")
+    service.location_resolver.resolve = AsyncMock(return_value=AsyncMock(status="ok", location=location))
+    service.client.get_hourly_forecast = AsyncMock(return_value=[{
+        "forecastTime": "2026-11-05T01:00Z",
+        "temperature": {"value": 18.5},
+        "precipitation": {"probability": 0.31, "amount": {"value": 0.2}},
+    }])
+    try:
+        result = await service.query(None, "昆山", "today@09:00", "rain")
+        assert result["weather"]["temperature_c"] == 18.5
+        assert result["weather"]["precipitation_probability"] == 0.31
+        assert result["weather"]["relevant_hours"][0]["forecast_time_local"] == "2026-11-05T09:00:00+08:00"
+        assert result["current_snapshot"] is None
+    finally:
+        await service.close()
+
+
 @pytest.fixture
 def daily_v1_data():
     with open(FIXTURES_DIR / "qweather_v1_daily.json", "r", encoding="utf-8") as f:

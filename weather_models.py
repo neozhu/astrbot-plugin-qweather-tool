@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 
@@ -201,9 +202,19 @@ def normalize_hourly_forecast(
                     prob_val = round(prob_val / 100.0, 2)
                 precip_prob = prob_val
 
+        forecast_time = str(h.get("forecastTime", ""))
+        try:
+            parsed_time = datetime.fromisoformat(forecast_time.replace("Z", "+00:00"))
+            local_tz = ZoneInfo(tz_name)
+            if parsed_time.tzinfo is None:
+                parsed_time = parsed_time.replace(tzinfo=local_tz)
+            forecast_time = parsed_time.astimezone(local_tz).isoformat()
+        except ValueError:
+            pass
+
         results.append(
             NormalizedHourlyForecast(
-                forecast_time_local=str(h.get("forecastTime", "")),
+                forecast_time_local=forecast_time,
                 temperature_c=temp_val,
                 feels_like_c=feels_val,
                 condition=cond_text,

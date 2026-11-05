@@ -15,6 +15,7 @@ if _PLUGIN_DIR not in sys.path:
 import aiohttp
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import Plain
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, register
 
 try:
@@ -58,7 +59,6 @@ except ImportError:
         request = None
 
 PLUGIN_NAME = "astrbot_plugin_qweather_tool"
-_PLAIN_TEXT_REPLY = "qweather_plain_text_reply"
 _WECHAT_PLATFORMS = {"wechat_native", "weixin_oc", "weixin_official_account", "wecom", "wecom_ai_bot"}
 
 
@@ -134,6 +134,8 @@ class QWeatherPlugin(Star):
         或在有效天气话题内继续追问且需要新数据时调用。
         普通寒暄、情绪表达、气象科普和无关对话不调用。
         当前上下文已有足够新、足够细的可信数据时无需重复调用。
+        日最高/最低温不能替代实时温度；实时数据缺失时应以 when=now 查询。
+        降雨概率来自明确未来时段的小时预报，不能从实时降水量推断。
 
         只修改用户本轮明确修改的地点、日期、时段和意图；优先继承有效
         天气会话或 Pending，而不是把每次省略日期都当作“现在”。
@@ -166,16 +168,30 @@ class QWeatherPlugin(Star):
             focus_text=focus,
         )
         if getattr(event, "get_platform_name", lambda: "")() in _WECHAT_PLATFORMS:
-            event.set_extra(_PLAIN_TEXT_REPLY, True)
             result = {
                 **result,
                 "response_guidance": "请用微信纯文本回答，不使用 Markdown 粗体、斜体、标题、表格或代码块；用短句和换行组织内容。",
             }
         return json.dumps(result, ensure_ascii=False)
 
+    @filter.on_llm_request()
+    async def guide_wechat_weather_request(self, event: AstrMessageEvent, request: ProviderRequest):
+        if event.get_platform_name() not in _WECHAT_PLATFORMS:
+            return
+        guidance = "微信不支持 Markdown，请始终使用纯文本回复，不使用粗体星号、斜体、标题、表格或代码块。"
+        if request.func_tool and request.func_tool.get_tool("get_weather"):
+            guidance += (
+                "用户泛问某地天气或询问当前温度，而上下文只有日最高/最低温或旧预报时，"
+                "应调用 get_weather，使用 when=now 获取当前温度，不要直接声称无法获取。"
+                "用户明确指定日期或延续已明确的时段时，尊重该时间范围。"
+                "降雨概率来自相应未来时段的小时预报，应按需补查；实时接口不提供概率，不能把缺失值当作 0。"
+            )
+        if guidance not in (request.system_prompt or ""):
+            request.system_prompt = (request.system_prompt or "") + "\n" + guidance
+
     @filter.on_decorating_result()
     async def format_wechat_weather_reply(self, event: AstrMessageEvent):
-        if not event.get_extra(_PLAIN_TEXT_REPLY, False):
+        if event.get_platform_name() not in _WECHAT_PLATFORMS:
             return
         result = event.get_result()
         if result:
@@ -185,7 +201,7 @@ class QWeatherPlugin(Star):
 
     @filter.on_using_llm_tool()
     async def format_wechat_weather_tool_message(self, event: AstrMessageEvent, tool, tool_args):
-        if not event.get_extra(_PLAIN_TEXT_REPLY, False) or tool.name != "send_message_to_user":
+        if event.get_platform_name() not in _WECHAT_PLATFORMS or tool.name != "send_message_to_user":
             return
         if not isinstance(tool_args, dict):
             return

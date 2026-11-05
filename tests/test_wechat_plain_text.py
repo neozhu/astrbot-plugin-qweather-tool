@@ -82,7 +82,36 @@ async def test_weather_direct_send_tool_is_also_plain_text(plugin):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("platform,weather_query", [("wechat_native", False), ("telegram", True)])
+async def test_wechat_cached_answer_is_plain_text_without_a_tool_call(plugin):
+    from astrbot.api.event import MessageEventResult
+    from astrbot.api.message_components import Plain
+
+    event = Event()
+    event.result = MessageEventResult(chain=[Plain("昆山今天预报**少云**，气温约 **13～21℃**。")])
+    await plugin.format_wechat_weather_reply(event)
+    assert event.result.chain[0].text == "昆山今天预报少云，气温约 13～21℃。"
+    args = {"messages": [{"type": "plain", "text": "**少云**"}]}
+    await plugin.format_wechat_weather_tool_message(event, SimpleNamespace(name="send_message_to_user"), args)
+    assert args["messages"][0]["text"] == "少云"
+
+
+@pytest.mark.asyncio
+async def test_wechat_request_guides_current_weather_and_hourly_probability(plugin):
+    from astrbot.core.agent.tool import FunctionTool, ToolSet
+    from astrbot.api.provider import ProviderRequest
+
+    request = ProviderRequest(system_prompt="原有人格", func_tool=ToolSet([
+        FunctionTool(name="get_weather", description="天气", parameters={"type": "object"})
+    ]))
+    await plugin.guide_wechat_weather_request(Event(), request)
+    assert request.system_prompt.startswith("原有人格")
+    assert "纯文本" in request.system_prompt
+    assert "when=now" in request.system_prompt
+    assert "小时预报" in request.system_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform,weather_query", [("telegram", False), ("telegram", True)])
 async def test_other_replies_keep_their_format(plugin, platform, weather_query):
     from astrbot.api.event import MessageEventResult
     from astrbot.api.message_components import Plain
