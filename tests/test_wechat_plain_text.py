@@ -111,6 +111,53 @@ async def test_wechat_request_guides_current_weather_and_hourly_probability(plug
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("platform", ["wechat_native", "webchat", "telegram"])
+async def test_weather_tool_is_preferred_over_search_on_every_platform(plugin, platform):
+    from astrbot.core.agent.tool import FunctionTool, ToolSet
+    from astrbot.api.provider import ProviderRequest
+
+    tools = ToolSet([
+        FunctionTool(name="get_weather", description="天气", parameters={"type": "object"}),
+        FunctionTool(name="web_search_tavily", description="搜索", parameters={"type": "object"}),
+    ])
+    request = ProviderRequest(system_prompt="原有人格", func_tool=tools)
+    event = Event(platform)
+    await plugin.guide_wechat_weather_request(event, request)
+
+    assert request.system_prompt.startswith("原有人格")
+    assert "优先调用 get_weather" in request.system_prompt
+    assert "联网搜索" in request.system_prompt
+    assert "need_location" in request.system_prompt
+    assert ("微信不支持 Markdown" in request.system_prompt) == (platform == "wechat_native")
+    assert request.func_tool is tools
+    assert tools.get_tool("web_search_tavily") is not None
+    plugin.weather_service.query.assert_not_awaited()
+
+    first_prompt = request.system_prompt
+    await plugin.guide_wechat_weather_request(event, request)
+    assert request.system_prompt == first_prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("platform", ["wechat_native", "webchat"])
+@pytest.mark.parametrize("tool_names", [None, [], ["web_search_tavily"]])
+async def test_unavailable_weather_tool_does_not_get_selection_guidance(plugin, platform, tool_names):
+    from astrbot.core.agent.tool import FunctionTool, ToolSet
+    from astrbot.api.provider import ProviderRequest
+
+    tools = None if tool_names is None else ToolSet([
+        FunctionTool(name=name, description=name, parameters={"type": "object"})
+        for name in tool_names
+    ])
+    request = ProviderRequest(system_prompt="原有人格", func_tool=tools)
+    await plugin.guide_wechat_weather_request(Event(platform), request)
+    assert "get_weather" not in request.system_prompt
+    assert request.func_tool is tools
+    if platform == "webchat":
+        assert request.system_prompt == "原有人格"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("platform,weather_query", [("telegram", False), ("telegram", True)])
 async def test_other_replies_keep_their_format(plugin, platform, weather_query):
     from astrbot.api.event import MessageEventResult

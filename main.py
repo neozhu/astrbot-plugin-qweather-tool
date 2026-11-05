@@ -94,7 +94,7 @@ def strip_weather_markdown(text: str) -> str:
     "astrbot_plugin_qweather_tool",
     "neozhu",
     "A context-aware weather tool for AstrBot LLM agents powered by QWeather.",
-    "0.1.4",
+    "0.1.5",
 )
 class QWeatherPlugin(Star):
     def __init__(self, context: Context, config: Dict[str, Any] = None):
@@ -148,6 +148,9 @@ class QWeatherPlugin(Star):
 
         用户明确查天气、需要温差比较、询问依赖天气的穿衣/户外/洗车建议，
         或在有效天气话题内继续追问且需要新数据时调用。
+        需要天气事实时优先调用 get_weather，不要先用联网搜索或网页摘要代替。
+        本工具已返回足够数据时直接回答，无需再搜索相同天气；
+        新闻、网页资料或用户明确要求的来源核验仍可使用搜索工具。
         普通寒暄、情绪表达、气象科普和无关对话不调用。
         当前上下文已有足够新、足够细的可信数据时无需重复调用。
         日最高/最低温不能替代实时温度；实时数据缺失时应以 when=now 查询。
@@ -196,18 +199,25 @@ class QWeatherPlugin(Star):
 
     @filter.on_llm_request()
     async def guide_wechat_weather_request(self, event: AstrMessageEvent, request: ProviderRequest):
-        if event.get_platform_name() not in _WECHAT_PLATFORMS:
-            return
-        guidance = "微信不支持 Markdown，请始终使用纯文本回复，不使用粗体星号、斜体、标题、表格或代码块。"
+        guidances = []
+        if event.get_platform_name() in _WECHAT_PLATFORMS:
+            guidances.append("微信不支持 Markdown，请始终使用纯文本回复，不使用粗体星号、斜体、标题、表格或代码块。")
         if request.func_tool and request.func_tool.get_tool("get_weather"):
-            guidance += (
+            guidances.append(
+                "当天气、温差或依赖天气的穿衣、出行建议需要新的天气事实时，优先调用 get_weather，"
+                "不要先用联网搜索或网页摘要代替天气工具。上下文已有足够新且匹配地点、时段的数据时直接回答，"
+                "工具已返回足够数据后也无需再搜索相同天气。返回 need_location 时询问城市并续接原问题，"
+                "不要改用搜索猜测地点；工具不可用或数据缺失时如实说明，不编造天气。"
+                "新闻、网页资料、工具覆盖范围外的信息或用户明确要求的来源核验仍可按需搜索，"
+                "搜索结果不得冒充本工具返回的数据。普通寒暄和气象科普无需调用天气工具。"
                 "用户泛问某地天气或询问当前温度，而上下文只有日最高/最低温或旧预报时，"
                 "应调用 get_weather，使用 when=now 获取当前温度，不要直接声称无法获取。"
                 "用户明确指定日期或延续已明确的时段时，尊重该时间范围。"
                 "降雨概率来自相应未来时段的小时预报，应按需补查；实时接口不提供概率，不能把缺失值当作 0。"
             )
-        if guidance not in (request.system_prompt or ""):
-            request.system_prompt = (request.system_prompt or "") + "\n" + guidance
+        for guidance in guidances:
+            if guidance not in (request.system_prompt or ""):
+                request.system_prompt = (request.system_prompt or "") + "\n" + guidance
 
     @filter.on_decorating_result()
     async def format_wechat_weather_reply(self, event: AstrMessageEvent):
@@ -281,7 +291,7 @@ class QWeatherPlugin(Star):
                 masked = "********"
         return json_response({
             "plugin": PLUGIN_NAME,
-            "version": "0.1.4",
+            "version": "0.1.5",
             "api_host": self.config.get("api_host") or "devapi.qweather.com",
             "has_api_key": bool(api_key),
             "masked_api_key": masked,
