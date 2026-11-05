@@ -23,20 +23,20 @@ function mount(bridge) {
   return { click: () => click(), get: id => document.getElementById(id) };
 }
 
-test('sandboxed view queries weather through the authorized bridge', async () => {
+test('sandboxed view tests API credentials through the authorized bridge', async () => {
   let ready = false;
   const page = mount({
     async ready() { ready = true; },
     async apiPost(endpoint, body) {
       assert.equal(ready, true);
-      assert.equal(endpoint, 'test-query');
-      assert.deepEqual(JSON.parse(JSON.stringify(body)), { when: 'now', focus: 'general' });
-      return { success: true, result: { status: 'ok', weather: { temperature_c: 18 } } };
+      assert.equal(endpoint, 'test-connection');
+      assert.deepEqual(JSON.parse(JSON.stringify(body)), {});
+      return { success: true, code: '200', latency_ms: 120, message: '接口连接正常' };
     },
   });
   await page.click();
   assert.equal(page.get('test-card').dataset.state, 'success');
-  assert.equal(JSON.parse(page.get('result').textContent).weather.temperature_c, 18);
+  assert.equal(JSON.parse(page.get('result').textContent).code, '200');
   assert.equal(page.get('test-button').disabled, false);
 });
 
@@ -68,15 +68,13 @@ test('network failures identify the Dashboard connection rather than the weather
   assert.equal(page.get('test-button').disabled, false);
 });
 
-test('ambiguous cities show an actionable explanation', async () => {
+test('API authentication failures show the provider diagnostic', async () => {
   const page = mount({
     async ready() {},
-    async apiPost() { return { success: false, result: {
-      status: 'ambiguous_location', candidates: [{ name: '苏州' }, { name: '昆山' }],
-    } }; },
+    async apiPost() { return { success: false, code: '401', message: '认证失败，请核对 API Key' }; },
   });
   await page.click();
-  assert.equal(page.get('status').textContent, '城市需要确认');
-  assert.match(page.get('status-hint').textContent, /苏州、昆山/);
+  assert.equal(page.get('status').textContent, '测试未通过');
+  assert.match(page.get('status-hint').textContent, /认证失败/);
   assert.equal(page.get('result-details').hidden, false);
 });
