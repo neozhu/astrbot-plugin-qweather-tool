@@ -128,6 +128,23 @@ async def test_error_mapping_without_credential_leakage_c15_c16_c66():
         assert secret_key not in str(res_5xx)
 
 
+@pytest.mark.asyncio
+async def test_unexpected_query_error_returns_provider_unavailable():
+    from weather_service import WeatherService
+
+    service = WeatherService(api_host="https://test.qweatherapi.com", api_key="test_key")
+    try:
+        with patch.object(service.location_resolver, "resolve", side_effect=RuntimeError("unexpected failure")):
+            result = await service.query(MockAstrEvent(), "昆山", "now", "general")
+
+        assert result == {
+            "status": "provider_unavailable",
+            "warnings": ["provider_unavailable"],
+        }
+    finally:
+        await service.close()
+
+
 def test_zero_vendor_attribution_in_tool_result_c36_c37():
     """SPEC §0.2, §11.1, §12.2 #11, C36, C37:
     Tool Result must NOT contain QWeather branding, logos, URLs, or promotional text.

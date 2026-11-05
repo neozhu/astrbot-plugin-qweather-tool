@@ -1,9 +1,10 @@
 import datetime
 from datetime import timedelta
-import logging
 import re
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
+
+from astrbot.api import logger
 
 try:
     from .cache import SingleFlight, TTLCache

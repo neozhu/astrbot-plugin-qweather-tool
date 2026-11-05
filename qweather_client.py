@@ -1,11 +1,9 @@
-import logging
 import math
 import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 import httpx
-
-logger = logging.getLogger(__name__)
+from astrbot.api import logger
 
 
 class QWeatherError(Exception):
