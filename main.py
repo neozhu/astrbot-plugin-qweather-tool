@@ -1,10 +1,8 @@
-import asyncio
 import inspect
 import json
 from pathlib import Path
 import re
 import sys
-import time
 from typing import Any, Dict
 
 # Ensure plugin directory is in sys.path so intra-plugin imports always resolve
@@ -12,7 +10,6 @@ _PLUGIN_DIR = str(Path(__file__).resolve().parent)
 if _PLUGIN_DIR not in sys.path:
     sys.path.insert(0, _PLUGIN_DIR)
 
-import aiohttp
 from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.message_components import Plain
 from astrbot.api.provider import ProviderRequest
@@ -20,12 +17,18 @@ from astrbot.api.star import Context, Star, register
 
 try:
     from .weather_service import WeatherService
+    from .qweather_client import QWeatherClient
 except (ImportError, ValueError):
     from weather_service import WeatherService
+    from qweather_client import QWeatherClient
 
 # AstrBot Web API & Plugin Views support
 try:
-    from astrbot.api.web import Response, error_response, json_response, request
+    from astrbot.api.web import error_response, json_response, request
+    from starlette.responses import Response as WebResponse
+
+    def Response(body, mimetype="text/html", status=200):
+        return WebResponse(body, media_type=mimetype, status_code=status)
 except ImportError:
     try:
         from quart import Response, request
@@ -91,7 +94,7 @@ def strip_weather_markdown(text: str) -> str:
     "astrbot_plugin_qweather_tool",
     "neozhu",
     "A context-aware weather tool for AstrBot LLM agents powered by QWeather.",
-    "0.1.1",
+    "0.1.2",
 )
 class QWeatherPlugin(Star):
     def __init__(self, context: Context, config: Dict[str, Any] = None):
@@ -128,7 +131,7 @@ class QWeatherPlugin(Star):
                     f"/{PLUGIN_NAME}/test",
                     self.handle_view_test,
                     ["GET"],
-                    "和风天气连通性测试与调试页面",
+                    "和风天气工具测试页面",
                 )
             except Exception:
                 pass
@@ -278,7 +281,7 @@ class QWeatherPlugin(Star):
                 masked = "********"
         return json_response({
             "plugin": PLUGIN_NAME,
-            "version": "0.1.1",
+            "version": "0.1.2",
             "api_host": self.config.get("api_host") or "devapi.qweather.com",
             "has_api_key": bool(api_key),
             "masked_api_key": masked,
@@ -294,100 +297,33 @@ class QWeatherPlugin(Star):
         return json_response({"error": "View file not found"}, status_code=404)
 
     async def handle_test_connection(self, *args, **kwargs):
-        """Test connectivity against QWeather API using current or provided credentials."""
+        """Check host/key with one uncached request through the business HTTP stack."""
         req_data = await self._parse_request_body()
-        api_host = req_data.get("api_host") or self.config.get("api_host") or "devapi.qweather.com"
+        api_host = req_data.get("api_host") or self.config.get("api_host") or ""
         api_key = req_data.get("api_key") or self.config.get("api_key") or ""
-
+        if not isinstance(api_host, str) or not isinstance(api_key, str):
+            return json_response({"success": False, "code": "INVALID_CONFIG",
+                                  "message": "API 域名和 Key 必须为文本，请检查插件配置。"})
+        api_host, api_key = api_host.strip(), api_key.strip()
+        if not api_host:
+            return json_response({"success": False, "code": "MISSING_API_HOST",
+                                  "message": "未配置专属 API 域名，请在插件配置中填写并保存。"})
         if not api_key:
-            return json_response({
-                "success": False,
-                "code": "MISSING_API_KEY",
-                "message": "未配置 API Key。请在 AstrBot 插件配置中填写并保存。",
-                "api_host": api_host,
-            })
-
-        clean_host = api_host.replace("https://", "").replace("http://", "").strip("/")
-        test_url = f"https://{clean_host}/geo/v2/city/lookup"
-
-        start_time = time.time()
+            return json_response({"success": False, "code": "MISSING_API_KEY",
+                                  "message": "未配置 API Key，请在插件配置中填写并保存。"})
         try:
-            timeout = aiohttp.ClientTimeout(total=6.0)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                headers = {"X-QW-Api-Key": api_key}
-                params = {"location": "101010100"}
-                async with session.get(test_url, headers=headers, params=params) as resp:
-                    latency_ms = int((time.time() - start_time) * 1000)
-                    resp_status = resp.status
-                    try:
-                        resp_data = await resp.json()
-                    except Exception:
-                        resp_data = {}
-
-                    code = str(resp_data.get("code", resp_status if resp_status != 200 else "INVALID_RESPONSE"))
-                    if resp_status == 200 and code == "200":
-                        return json_response({
-                            "success": True,
-                            "code": "200",
-                            "latency_ms": latency_ms,
-                            "message": f"连接成功！QWeather GeoAPI 鉴权与网络正常 (耗时 {latency_ms}ms)。",
-                            "api_host": clean_host,
-                        })
-                    elif resp_status == 401 or code == "401":
-                        return json_response({
-                            "success": False,
-                            "code": "401",
-                            "latency_ms": latency_ms,
-                            "message": "认证失败 (401 Unauthorized)：API Key 无效，请核对是否正确填写。",
-                            "api_host": clean_host,
-                        })
-                    elif resp_status == 402 or code == "402":
-                        return json_response({
-                            "success": False,
-                            "code": "402",
-                            "latency_ms": latency_ms,
-                            "message": "账户已欠费或配额已耗尽 (402 Payment Required)。",
-                            "api_host": clean_host,
-                        })
-                    elif resp_status == 403 or code == "403":
-                        return json_response({
-                            "success": False,
-                            "code": "403",
-                            "latency_ms": latency_ms,
-                            "message": f"无权限访问 (403 Forbidden)：请确认专属 API Host {clean_host} 与密钥所属项目一致，并检查接口访问权限。",
-                            "api_host": clean_host,
-                        })
-                    else:
-                        return json_response({
-                            "success": False,
-                            "code": code,
-                            "latency_ms": latency_ms,
-                            "message": f"QWeather API 异常：HTTP {resp_status}, 错误码 {code}。",
-                            "api_host": clean_host,
-                        })
-        except aiohttp.ClientConnectorError as e:
-            latency_ms = int((time.time() - start_time) * 1000)
-            return json_response({
-                "success": False,
-                "code": "CONNECTION_FAILED",
-                "latency_ms": latency_ms,
-                "message": f"无法连接到 {clean_host}：网络连接失败 ({e})。请检查服务器网络或 DNS。",
-                "api_host": clean_host,
-            })
-        except asyncio.TimeoutError:
-            return json_response({
-                "success": False,
-                "code": "TIMEOUT",
-                "message": f"连接超时 (6s)：访问 {clean_host} 超时，请检查服务器网络环境或防火墙设置。",
-                "api_host": clean_host,
-            })
-        except Exception as e:
-            return json_response({
-                "success": False,
-                "code": "ERROR",
-                "message": f"测试过程发生异常: {e}",
-                "api_host": clean_host,
-            })
+            client = QWeatherClient(api_host, api_key, timeout=6.0)
+        except ValueError:
+            return json_response({"success": False, "code": "INVALID_API_HOST",
+                                  "message": "API 域名格式无效，请填写专属域名，且只使用 HTTPS。"})
+        try:
+            return json_response(await client.test_connection())
+        except Exception:
+            # Do not expose raw exceptions, provider bodies or credential-bearing URLs.
+            return json_response({"success": False, "code": "ERROR",
+                                  "message": "连接测试执行异常，请检查服务器日志后重试。"})
+        finally:
+            await client.close()
 
     async def handle_test_query(self, *args, **kwargs):
         """Test weather parsing and querying workflow."""

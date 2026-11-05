@@ -3,7 +3,7 @@
 [![CI](https://github.com/neozhu/astrbot-plugin-qweather-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/neozhu/astrbot-plugin-qweather-tool/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![AstrBot](https://img.shields.io/badge/AstrBot-4.x-green.svg)](https://github.com/Soulter/AstrBot)
-[![Tests](https://img.shields.io/badge/Tests-104%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-120%20Passed-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 面向 [AstrBot](https://github.com/Soulter/AstrBot) LLM Agent 的**上下文感知和风天气插件**。
@@ -131,11 +131,13 @@ pip install -r astrbot_plugin_qweather_tool/requirements.txt
 
 > **安全提示**：请妥善保护 AstrBot 配置文件及备份，避免将包含 `api_key` 的配置提交至公开代码仓库。
 
-### 4. API 连接测试
+### 4. 和风天气工具测试
 
-保存插件配置后，在 AstrBot 控制台的 **插件管理 → 和风天气工具 → 插件详情** 中打开 **「连接测试与调试」** 视图。
+保存插件配置后，在 AstrBot 控制台的 **插件管理 → 和风天气工具 → 插件详情** 中打开 **「和风天气工具测试」** 视图。
 
-点击 **「开始测试」**，使用已保存的域名和密钥检查 API 网络连通性与认证结果，显示成功或失败及诊断信息。测试使用固定位置 ID，不依赖默认城市，也不执行天气查询。
+点击 **「开始测试」**，使用已保存的域名与 Key，通过与天气查询相同的 HTTP 客户端调用一次 `/weather/v1/current/39.90/116.41`。实时天气返回有效数据即验证通过，不要求响应包含旧版接口的 `code` 字段。不调用地点搜索，不执行完整天气简报，也不逐个检查生活指数、空气质量、预警或历史接口的权限。
+
+验证使用固定坐标，不依赖默认城市、不修改配置、不发送聊天消息。无效 Key、接口拒绝访问、限流、超时和无效响应分别显示对应原因；网络错误不会被当作 Key 无效。验证通过只说明基础天气调用正常，不代表账号已开通所有附加接口。
 
 测试视图通过 AstrBot 官方 bridge 使用当前控制台的登录授权，不要直接打开 HTML 文件或 `/api/plug/...` 地址。
 
@@ -200,7 +202,7 @@ astrbot-plugin-qweather-tool/
 ├── docs/                      # 规范设计与实施报告
 │   ├── AstrBot-Weather-Tool-SPEC-v1.3.md
 │   └── IMPLEMENTATION-REPORT.md
-└── tests/                     # 自动化测试套件（104 个 Python 用例及 5 个 JavaScript 用例）
+└── tests/                     # 自动化测试套件（120 个 Python 用例及 5 个 JavaScript 用例）
     ├── test_tool_contract.py
     ├── test_location.py
     ├── test_current_weather.py

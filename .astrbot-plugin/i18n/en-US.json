@@ -1,8 +1,8 @@
 {
   "views": {
     "test": {
-      "title": "Connection Test",
-      "description": "Test QWeather API connectivity and query resolution"
+      "title": "QWeather Tool Test",
+      "description": "Validate the API host and key with one current-weather request"
     }
   }
 }

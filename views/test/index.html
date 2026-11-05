@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>和风天气 API 连接测试</title>
+  <title>和风天气工具测试</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -91,7 +91,7 @@
     <section class="card" aria-labelledby="title" data-state="idle" id="test-card">
       <div class="intro">
         <div class="heading">
-          <div><p class="eyebrow">配置验证</p><h1 id="title">API 连接测试</h1></div>
+          <div><p class="eyebrow">配置验证</p><h1 id="title">和风天气工具测试</h1></div>
           <svg class="weather-icon" viewBox="0 0 90 72" fill="none" aria-hidden="true">
             <circle cx="61" cy="25" r="13" fill="#f2cf7c"/>
             <g stroke="#c6973b" stroke-width="1.5" stroke-linecap="round"><path d="M61 4V1M61 49v-3M82 25h4M37 25h3M76 10l3-3M76 40l3 3M46 10l-3-3"/></g>
@@ -99,11 +99,11 @@
             <path d="M23 65h24M53 65h7" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
-        <p class="description">一键确认 API 域名与密钥是否可用。使用已保存的插件配置，检查网络连接和接口认证。</p>
+        <p class="description">使用已保存的域名与 Key，只调用一次实时天气接口确认配置可用，不逐项测试其他接口权限。</p>
       </div>
       <dl class="settings">
         <div class="setting"><dt>使用配置</dt><dd>已保存的 API 域名与密钥</dd></div>
-        <div class="setting"><dt>检查内容</dt><dd>网络连通性与密钥认证</dd></div>
+        <div class="setting"><dt>检查内容</dt><dd>一次实时天气 API 调用</dd></div>
       </dl>
       <div class="actions">
         <div class="feedback" role="status" aria-live="polite" aria-atomic="true">

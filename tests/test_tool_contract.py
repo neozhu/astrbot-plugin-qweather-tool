@@ -164,42 +164,6 @@ async def test_tool_invocation_returns_json_to_agent_without_sending(focus, stat
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("http_status,body,success", [
-    (200, {"code": "200", "location": [{"name": "北京"}]}, True),
-    (401, {"code": "401"}, False),
-    (403, {"code": "403"}, False),
-    (200, {}, False),
-])
-async def test_connection_checks_api_without_resolving_default_city(http_status, body, success):
-    from unittest.mock import AsyncMock, MagicMock, patch
-    from quart import Quart
-    from main import QWeatherPlugin
-
-    plugin = QWeatherPlugin(object(), {
-        "api_host": "example.qweatherapi.com", "api_key": "test-key",
-        "default_city": "不需要解析的默认地点",
-    })
-    plugin.weather_service.query = AsyncMock(side_effect=AssertionError("weather query must not run"))
-    response = AsyncMock()
-    response.status = http_status
-    response.json.return_value = body
-    session = MagicMock()
-    session.get.return_value.__aenter__.return_value = response
-    app = Quart(__name__)
-    try:
-        with patch("main.aiohttp.ClientSession") as factory:
-            factory.return_value.__aenter__.return_value = session
-            async with app.test_request_context("/test-connection", method="POST", json={}):
-                result = await plugin.handle_test_connection()
-                data = await result.get_json()
-        assert data["success"] is success
-        assert session.get.call_args.args[0] == "https://example.qweatherapi.com/geo/v2/city/lookup"
-        assert session.get.call_args.kwargs["params"] == {"location": "101010100"}
-    finally:
-        await plugin.terminate()
-
-
-@pytest.mark.asyncio
 async def test_lifecycle_terminate_cleans_resources():
     """SPEC §18: terminate() must cleanly release resources on shutdown/reload."""
     from main import QWeatherPlugin
@@ -316,7 +280,7 @@ async def test_query_panel_reports_weather_status(status, success):
     try:
         async with app.test_request_context("/test-query", method="POST", json={"when": "now"}):
             response = await plugin.handle_test_query()
-            data = await response.get_json()
+            data = json.loads(response.body)
         assert data["success"] is success
         assert data["result"] == {"status": status}
     finally:

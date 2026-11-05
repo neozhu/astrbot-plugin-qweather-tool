@@ -1,4 +1,6 @@
 import logging
+import math
+import time
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 import httpx
@@ -42,7 +44,7 @@ class QWeatherClient:
     def _build_headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "application/json",
-            "User-Agent": "astrbot-plugin-qweather-tool/0.1.1",
+            "User-Agent": "astrbot-plugin-qweather-tool/0.1.2",
         }
         if self.api_key:
             headers["X-QW-Api-Key"] = self.api_key
@@ -96,18 +98,8 @@ class QWeatherClient:
         local_time: bool = False,
     ) -> Dict[str, Any]:
         """Fetch real-time weather from /weather/v1/current/{lat:.2f}/{lon:.2f} (SPEC §10.2, §10.3)."""
-        lat_formatted = f"{float(lat):.2f}"
-        lon_formatted = f"{float(lon):.2f}"
-
-        url = f"{self.api_host}/weather/v1/current/{lat_formatted}/{lon_formatted}"
-        params: Dict[str, Any] = {
-            "lang": lang,
-            "localTime": "true" if local_time else "false",
-        }
-
-        client = self._get_client()
         try:
-            resp = await client.get(url, params=params, headers=self._build_headers())
+            resp = await self._request_current(lat, lon, lang, local_time)
             if resp.status_code == 200:
                 data = resp.json()
                 if isinstance(data, dict) and "temperature" in data:
@@ -119,6 +111,61 @@ class QWeatherClient:
         except Exception as e:
             logger.error(f"Current weather request error: {type(e).__name__}")
             return {}
+
+    async def _request_current(self, lat: float, lon: float, lang: str = "zh", local_time: bool = False):
+        """Use the exact same endpoint, authentication and transport for queries and checks."""
+        return await self._get_client().get(
+            f"{self.api_host}/weather/v1/current/{float(lat):.2f}/{float(lon):.2f}",
+            params={"lang": lang, "localTime": "true" if local_time else "false"},
+            headers=self._build_headers(), timeout=self.timeout,
+        )
+
+    async def test_connection(self) -> Dict[str, Any]:
+        """Validate host/key with one uncached current-weather request, not an API sweep."""
+        started = time.perf_counter()
+
+        def result(success, code, message):
+            return {"success": success, "code": code, "message": message,
+                    "latency_ms": int((time.perf_counter() - started) * 1000)}
+
+        try:
+            response = await self._request_current(39.90, 116.41)
+            try:
+                data = response.json()
+            except ValueError:
+                data = None
+
+            code = str(response.status_code)
+            if response.status_code == 200:
+                code = "INVALID_RESPONSE"
+                if isinstance(data, dict):
+                    provider_error = data.get("error")
+                    provider_code = str(provider_error.get("status")) if isinstance(provider_error, dict) else str(data.get("code", "200"))
+                    if provider_code == "200":
+                        value = data.get("temperature")
+                        value = value.get("value") if isinstance(value, dict) else value
+                        try:
+                            valid = not isinstance(value, bool) and math.isfinite(float(value))
+                        except (ValueError, TypeError, OverflowError):
+                            valid = False
+                        if valid:
+                            return result(True, "200", "连接成功，实时天气接口调用正常，API 域名与 Key 可用。")
+                    elif provider_code in {"401", "402", "403", "404", "429", "500", "503"}:
+                        code = provider_code
+
+            messages = {
+                "401": "认证失败，请核对已保存的 API Key。",
+                "402": "天气服务账户余额或配额不足，请检查账户状态。",
+                "403": "实时天气接口拒绝访问，请核对 API 域名、Key 所属项目及接口权限。",
+                "404": "未找到实时天气接口，请核对专属 API 域名。",
+                "429": "天气服务请求被限流，请稍后重试；这不代表 Key 无效。",
+                "INVALID_RESPONSE": "接口未返回有效的实时天气数据，请核对 API 域名或代理响应。",
+            }
+            return result(False, code, messages.get(code, "天气服务暂时不可用，请稍后重试。"))
+        except httpx.TimeoutException:
+            return result(False, "TIMEOUT", "实时天气接口请求超时，请检查服务器网络或代理后重试。")
+        except httpx.RequestError:
+            return result(False, "CONNECTION_FAILED", "无法连接天气服务，请检查服务器网络、DNS、代理或证书配置。")
 
     async def get_daily_forecast(
         self,

@@ -1,8 +1,8 @@
 {
   "views": {
     "test": {
-      "title": "连接测试与调试",
-      "description": "测试和风天气 API 连通性、实时天气查询与返回结果调试"
+      "title": "和风天气工具测试",
+      "description": "通过一次实时天气请求验证 API 域名与 Key 是否可用"
     }
   }
 }
