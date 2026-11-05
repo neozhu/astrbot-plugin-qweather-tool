@@ -1,17 +1,20 @@
 {
   "api_host": {
-    "description": "和风天气专属 API Host，例如 abcxyz.qweatherapi.com",
+    "description": "API 域名（必填）",
+    "hint": "从[和风天气控制台](https://console.qweather.com/)复制账号的专属 API Host，例如 abcxyz.qweatherapi.com。只填写域名，不带 https://、路径或端口；不要填写和风天气官网地址。",
     "type": "string",
     "default": ""
   },
   "api_key": {
-    "description": "和风天气 API Key",
+    "description": "API Key（必填）",
+    "hint": "填写和风天气控制台创建的 API Key，使用同一账号的专属 API 域名。不要填写项目 ID、凭据 ID 或 JWT。保存配置后，可在「和风天气工具测试」中验证是否可用。",
     "type": "string",
     "secret": true,
     "default": ""
   },
   "default_city": {
-    "description": "私聊默认查询城市，可留空；推荐填写完整行政区，如 江苏省苏州市昆山市",
+    "description": "私聊默认城市（选填）",
+    "hint": "私聊未指定地点、且没有可复用的城市时使用。建议填写完整行政区，例如 江苏省苏州市昆山市，以减少同名地点歧义。留空时会询问城市；群聊不会使用这里的默认城市。",
     "type": "string",
     "default": ""
   }

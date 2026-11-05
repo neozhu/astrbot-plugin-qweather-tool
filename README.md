@@ -129,6 +129,8 @@ pip install -r astrbot_plugin_qweather_tool/requirements.txt
 | `api_key` | string | 是 | `""` | 和风天气 API Key（后台配置输入时自动遮罩保护） |
 | `default_city` | string | 否 | `""` | 私聊默认查询城市（建议填写完整地名，如 `江苏省苏州市昆山市`；群聊不生效） |
 
+配置面板为每个参数提供简短标题和 `hint` 副说明，包含控制台入口、填写示例、常见误填项和生效范围。AstrBot 的 `subtitles` 用于下拉选项的副标题；本插件的三个参数均为自由文本输入，副说明使用配置面板原生支持的 `hint` 展示。
+
 > **安全提示**：请妥善保护 AstrBot 配置文件及备份，避免将包含 `api_key` 的配置提交至公开代码仓库。
 
 ### 4. 和风天气工具测试

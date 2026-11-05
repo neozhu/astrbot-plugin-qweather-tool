@@ -44,7 +44,7 @@ class QWeatherClient:
     def _build_headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "application/json",
-            "User-Agent": "astrbot-plugin-qweather-tool/0.1.2",
+            "User-Agent": "astrbot-plugin-qweather-tool/0.1.3",
         }
         if self.api_key:
             headers["X-QW-Api-Key"] = self.api_key

@@ -5,7 +5,7 @@ desc: |
   为 AstrBot 大模型 Agent 提供客观、准确、抗幻觉的天气事实与穿衣温差决策支持。
   基于和风天气 QWeather API 构建，支持 5 级精确行政区与地名消歧、多轮会话继承与 Pending 追问恢复、严格同口径温差比较以及有界内存缓存与 Single-Flight 并发去重。
 description: 面向 AstrBot LLM Agent 的上下文感知和风天气插件
-version: "0.1.2"
+version: "0.1.3"
 author: neozhu
 repo: https://github.com/neozhu/astrbot-plugin-qweather-tool
 astrbot_version: ">=4.14.0"
