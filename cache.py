@@ -54,7 +54,7 @@ class SingleFlight:
     """Async single-flight deduplication for concurrent identical queries (SPEC §13.2, §16, C40)."""
 
     def __init__(self):
-        self._in_flight: Dict[str, asyncio.Future] = {}
+        self._in_flight: Dict[str, asyncio.Task] = {}
 
     async def execute(
         self,
@@ -62,21 +62,19 @@ class SingleFlight:
         coro_fn: Callable[[], Coroutine[Any, Any, T]],
     ) -> T:
         """Execute coro_fn once for identical concurrent key, deduplicating inflight calls."""
-        if key in self._in_flight:
-            return await self._in_flight[key]
+        task = self._in_flight.get(key)
+        if task is None:
+            # Shared work has its own lifetime: cancelling any one HTTP caller
+            # must not cancel or strand the other callers sharing its result.
+            task = asyncio.create_task(coro_fn())
+            self._in_flight[key] = task
 
-        loop = asyncio.get_running_loop()
-        fut = loop.create_future()
-        self._in_flight[key] = fut
+            def finished(done):
+                if self._in_flight.get(key) is done:
+                    self._in_flight.pop(key, None)
+                if not done.cancelled():
+                    # Retrieve exceptions even when every caller has gone away.
+                    done.exception()
 
-        try:
-            result = await coro_fn()
-            if not fut.done():
-                fut.set_result(result)
-            return result
-        except Exception as e:
-            if not fut.done():
-                fut.set_exception(e)
-            raise
-        finally:
-            self._in_flight.pop(key, None)
+            task.add_done_callback(finished)
+        return await asyncio.shield(task)

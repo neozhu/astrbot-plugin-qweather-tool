@@ -119,7 +119,7 @@ async def test_other_replies_keep_their_format(plugin, platform, weather_query):
     event = Event(platform)
     if weather_query:
         payload = json.loads(await plugin.get_weather(event, "昆山", "now", "general"))
-        assert "response_guidance" not in payload
+        assert "response_guidance" in payload  # style guidance now applies to weather on every platform
     event.result = MessageEventResult(chain=[Plain("**保留原文**")])
     args = {"messages": [{"type": "plain", "text": "**保留原文**"}]}
     await plugin.format_wechat_weather_reply(event)

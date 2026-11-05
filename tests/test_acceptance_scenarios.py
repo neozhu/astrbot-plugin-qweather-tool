@@ -114,8 +114,8 @@ async def test_acceptance_c14_unsupported_period_out_of_range(mock_kunshan):
 @pytest.mark.asyncio
 async def test_acceptance_c42_c44_c46_routing_rules(mock_kunshan):
     """C42, C44, C46:
-    - C42: '昆山现在多少度' -> only Current API
-    - C44: '今天整体天气' -> Daily API
+    - C42: now retains Current as primary, without retrying a failed primary in the brief
+    - C44: today retains Daily as primary; optional facts use their own caches
     - C46: '明天穿什么' -> Daily/Hourly, NEVER calls Current
     """
     service = WeatherService(api_host="https://test.qweatherapi.com", api_key="test_key")

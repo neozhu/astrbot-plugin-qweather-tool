@@ -42,7 +42,7 @@ class QWeatherClient:
     def _build_headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "application/json",
-            "User-Agent": "astrbot-plugin-qweather-tool/0.1.0",
+            "User-Agent": "astrbot-plugin-qweather-tool/0.1.1",
         }
         if self.api_key:
             headers["X-QW-Api-Key"] = self.api_key
@@ -85,7 +85,7 @@ class QWeatherClient:
                     return []
             return []
         except Exception as e:
-            logger.error(f"GeoAPI search error: {e}")
+            logger.error(f"GeoAPI search error: {type(e).__name__}")
             return []
 
     async def get_current_weather(
@@ -117,7 +117,7 @@ class QWeatherClient:
             logger.warning(f"QWeather current API HTTP error: status={resp.status_code}")
             return {}
         except Exception as e:
-            logger.error(f"Current weather request error: {e}")
+            logger.error(f"Current weather request error: {type(e).__name__}")
             return {}
 
     async def get_daily_forecast(
@@ -145,7 +145,7 @@ class QWeatherClient:
                 return data.get("days", [])
             return []
         except Exception as e:
-            logger.error(f"Daily forecast request error: {e}")
+            logger.error(f"Daily forecast request error: {type(e).__name__}")
             return []
 
     async def get_hourly_forecast(
@@ -173,7 +173,7 @@ class QWeatherClient:
                 return data.get("hours", [])
             return []
         except Exception as e:
-            logger.error(f"Hourly forecast request error: {e}")
+            logger.error(f"Hourly forecast request error: {type(e).__name__}")
             return []
 
     async def get_historical_weather(
@@ -204,7 +204,7 @@ class QWeatherClient:
                 return None
             return None
         except Exception as e:
-            logger.error(f"Historical weather request error: {e}")
+            logger.error(f"Historical weather request error: {type(e).__name__}")
             return None
 
     async def close(self) -> None:
@@ -212,3 +212,44 @@ class QWeatherClient:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
             self._client = None
+
+    async def _get_optional(
+        self, path: str, params: Dict[str, Any], field: str, legacy: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        """Fetch supplementary data without confusing unavailable with an empty result.
+
+        Never log raw request exceptions: their URLs can contain credentials.
+        """
+        try:
+            resp = await self._get_client().get(
+                f"{self.api_host}{path}", params=params,
+                headers=self._build_headers(), timeout=min(self.timeout, 4.0),
+            )
+            if resp.status_code != 200:
+                return None
+            data = resp.json()
+            if not isinstance(data, dict) or (legacy and str(data.get("code")) != "200"):
+                return None
+            items = data.get(field)
+            if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+                return None
+            return data
+        except (httpx.HTTPError, ValueError, TypeError):
+            return None
+
+    async def get_indices(self, location_id: str) -> Optional[Dict[str, Any]]:
+        """Three-day sport, car wash, clothing and UV indices, subject to entitlement."""
+        return await self._get_optional(
+            "/v7/indices/3d", {"location": location_id, "type": "1,2,3,5", "lang": "zh"},
+            "daily", legacy=True,
+        )
+
+    async def get_air_quality(self, lat: float, lon: float) -> Optional[Dict[str, Any]]:
+        return await self._get_optional(
+            f"/airquality/v1/current/{lat:.2f}/{lon:.2f}", {"lang": "zh"}, "indexes",
+        )
+
+    async def get_warnings(self, location_id: str) -> Optional[Dict[str, Any]]:
+        return await self._get_optional(
+            "/v7/warning/now", {"location": location_id, "lang": "zh"}, "warning", legacy=True,
+        )

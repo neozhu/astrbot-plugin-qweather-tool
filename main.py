@@ -60,6 +60,19 @@ except ImportError:
 
 PLUGIN_NAME = "astrbot_plugin_qweather_tool"
 _WECHAT_PLATFORMS = {"wechat_native", "weixin_oc", "weixin_official_account", "wecom", "wecom_ai_bot"}
+WEATHER_RESPONSE_GUIDANCE = (
+    "默认用一到两段自然纯文本回答，不使用图标或表情，不逐项罗列指标，不使用标题、表格或编号清单。"
+    "先说天气、气温与体感、全天高低温和穿衣；再说显著风雨变化及相关生活建议。"
+    "用户明确要求简短、只看某项或详细说明时，优先遵从。"
+    "参考 brief 中有数据的 current、daily、hourly、indices；湿度、空气质量只在明显影响舒适或出行时提及，"
+    "重要有效预警优先。生活指数按目标日期使用，不强行播报全部指标。"
+    "current 是当前实况，不能作为未来体感；daily 是全天范围，不能作为当前气温。"
+    "hourly 仅覆盖返回的逐小时时刻，峰值概率属于单个小时，不能说成整段或全天概率；"
+    "不要把部分时段数据说成全天结论。湿度与概率为0到1比例，展示百分数时乘100；"
+    "风速单位为米/秒，不直接称为风力级数；AQI 必须保留指数标准，不混用不同标准。"
+    "仅依据实际可用数据给建议，缺失不能当作0；预警不可用不代表没有预警。"
+    "不编造指数或补齐空值，不逐条解释缺失项目，只有缺失影响用户问题时才简短说明。"
+)
 
 
 def strip_weather_markdown(text: str) -> str:
@@ -78,7 +91,7 @@ def strip_weather_markdown(text: str) -> str:
     "astrbot_plugin_qweather_tool",
     "neozhu",
     "A context-aware weather tool for AstrBot LLM agents powered by QWeather.",
-    "0.1.0",
+    "0.1.1",
 )
 class QWeatherPlugin(Star):
     def __init__(self, context: Context, config: Dict[str, Any] = None):
@@ -136,6 +149,9 @@ class QWeatherPlugin(Star):
         当前上下文已有足够新、足够细的可信数据时无需重复调用。
         日最高/最低温不能替代实时温度；实时数据缺失时应以 when=now 查询。
         降雨概率来自明确未来时段的小时预报，不能从实时降水量推断。
+        工具会按目标时间补充 brief 天气事实与生活指数；默认用一到两段纯文本
+        概括体感、全天高低温、风雨变化和相关建议，不使用图标或表情。
+        不逐项播报所有指标；用户明确要求只看某项或更详细时优先遵从。
 
         只修改用户本轮明确修改的地点、日期、时段和意图；优先继承有效
         天气会话或 Pending，而不是把每次省略日期都当作“现在”。
@@ -167,10 +183,11 @@ class QWeatherPlugin(Star):
             when_text=when,
             focus_text=focus,
         )
+        result = {**result, "response_guidance": WEATHER_RESPONSE_GUIDANCE}
         if getattr(event, "get_platform_name", lambda: "")() in _WECHAT_PLATFORMS:
             result = {
                 **result,
-                "response_guidance": "请用微信纯文本回答，不使用 Markdown 粗体、斜体、标题、表格或代码块；用短句和换行组织内容。",
+                "response_guidance": WEATHER_RESPONSE_GUIDANCE + "请用微信纯文本回答，不使用 Markdown 粗体、斜体、标题、表格或代码块；用短句和换行组织内容。",
             }
         return json.dumps(result, ensure_ascii=False)
 
@@ -261,7 +278,7 @@ class QWeatherPlugin(Star):
                 masked = "********"
         return json_response({
             "plugin": PLUGIN_NAME,
-            "version": "0.1.0",
+            "version": "0.1.1",
             "api_host": self.config.get("api_host") or "devapi.qweather.com",
             "has_api_key": bool(api_key),
             "masked_api_key": masked,

@@ -1,5 +1,10 @@
 # AstrBot QWeather Conversation Plugin — SPEC.md
 
+> **2026-11-05 简报扩展**：用户已确认“完整获取数据、一到两段纯文本回答、不加图标或表情”。
+> [简报设计](superpowers/specs/2026-11-05-weather-brief-design.md) 扩展本文“不接生活指数/空气质量”的原范围，
+> 并允许在独立 `brief` 中补充 current/daily/hourly、生活指数、当前空气质量和有效预警。
+> 原主查询的时间含义与单一工具架构不变，今日实况不得冒充未来预报；附加接口不可用时保留基础天气。
+
 > **项目名称**：`astrbot_plugin_qweather_tool`  
 > **版本**：v1.3（完整开发基线：LLM 参数半结构化 + 无法确认时间默认现在）  
 > **日期**：2026-11-04  

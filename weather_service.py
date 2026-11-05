@@ -12,6 +12,7 @@ try:
     from .temperature_comparator import TemperatureComparator
     from .time_resolver import TimeResolver
     from .weather_context import WeatherContextStore
+    from .weather_brief import WeatherBriefBuilder
     from .weather_models import (
         normalize_current_weather,
         normalize_daily_forecast,
@@ -24,6 +25,7 @@ except (ImportError, ValueError):
     from temperature_comparator import TemperatureComparator
     from time_resolver import TimeResolver
     from weather_context import WeatherContextStore
+    from weather_brief import WeatherBriefBuilder
     from weather_models import (
         normalize_current_weather,
         normalize_daily_forecast,
@@ -380,6 +382,8 @@ class WeatherService:
                     norm = await self.single_flight.execute(cache_key, _fetch)
                     if norm:
                         self.cache.set(cache_key, norm, TTLCache.TTL_CURRENT)
+                    else:
+                        self.cache.set("missing:" + cache_key, True, 60)
                     from_cache = False
 
                 if norm:
@@ -412,6 +416,8 @@ class WeatherService:
                     norm_daily = await self.single_flight.execute(cache_key, _fetch_d)
                     if norm_daily:
                         self.cache.set(cache_key, norm_daily, TTLCache.TTL_DAILY)
+                    else:
+                        self.cache.set("missing:" + cache_key, True, 60)
                     from_cache = False
 
                 target_date_str = target.start_local[:10]
@@ -445,6 +451,8 @@ class WeatherService:
                     norm_hourly = await self.single_flight.execute(cache_key, _fetch_h)
                     if norm_hourly:
                         self.cache.set(cache_key, norm_hourly, TTLCache.TTL_HOURLY)
+                    else:
+                        self.cache.set("missing:" + cache_key, True, 60)
                     from_cache = False
 
                 # Filter hours in [target.start_local, target.end_local)
@@ -464,8 +472,8 @@ class WeatherService:
                         "temperature_min_c": min((h.temperature_c for h in relevant if h.temperature_c is not None), default=None),
                         "temperature_max_c": max((h.temperature_c for h in relevant if h.temperature_c is not None), default=None),
                         "wind_speed_ms": first.wind_speed_ms,
-                        "precipitation_probability": first.precipitation_probability,
-                        "precipitation_mm": sum((h.precipitation_mm for h in relevant if h.precipitation_mm is not None), 0.0),
+                        "precipitation_probability": max((h.precipitation_probability for h in relevant if h.precipitation_probability is not None), default=None),
+                        "precipitation_mm": round(sum(h.precipitation_mm for h in relevant), 2) if all(h.precipitation_mm is not None for h in relevant) else None,
                         "relevant_hours": [h.to_dict() for h in relevant],
                     }
 
@@ -501,6 +509,15 @@ class WeatherService:
                 weather_data=weather_data,
                 comparison=comparison_dict,
             )
+
+        if self.client and loc and time_res.baseline is None and not (target.granularity == "hourly" and target.end_local <= now_local.isoformat()):
+            # Optional brief failures must not discard the primary weather facts.
+            try:
+                res_payload["brief"] = await WeatherBriefBuilder(
+                    self.client, self.cache, self.single_flight,
+                ).build(loc, target, now_dt)
+            except Exception:
+                res_payload["brief"] = {"warnings": ["brief_unavailable"]}
 
         return res_payload
 

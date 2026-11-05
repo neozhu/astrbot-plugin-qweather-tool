@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![AstrBot](https://img.shields.io/badge/AstrBot-4.x-green.svg)](https://github.com/Soulter/AstrBot)
-[![Tests](https://img.shields.io/badge/Tests-48%20Passed-success.svg)]()
+[![Tests](https://img.shields.io/badge/Tests-104%20Passed-success.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 面向 [AstrBot](https://github.com/Soulter/AstrBot) LLM Agent 的**上下文感知和风天气插件**。
@@ -10,6 +10,39 @@
 遵循 **[SPEC v1.3](docs/AstrBot-Weather-Tool-SPEC-v1.3.md)** 规范构建，采用严谨的测试驱动开发（TDD），为大模型对话提供客观、准确、抗幻觉的天气事实与穿衣温差决策依据。
 
 ---
+
+## 天气简报：数据更完整，回答保持简洁
+
+普通天气查询默认补充当前气温与体感、全天高低温和昼夜天气、风与湿度、相关逐小时变化，以及穿衣、紫外线、运动和洗车指数。当天查询还会尝试获取当前空气质量和有效天气预警。最终仍由 AstrBot 当前模型自然作答，默认一到两段纯文本，不添加图标或表情，也不逐项罗列全部指标。用户明确要求简短或详细时优先遵从。
+
+回答优先说明气温、体感、温差和风雨变化，再给相关的生活建议；湿度、空气质量在明显影响舒适度或出行时提及，重要预警优先。生活指数是供应商数据，不是插件自行生成；没有权限或缺失时不会编造。指数覆盖今天及未来两天；实时空气质量和当前天气不会作为未来预报使用。小时数据只代表返回的时刻，单小时最高降雨概率不代表全天概率。
+
+新增接口使用现有 `api_host` 和 `api_key`，无需增加插件配置：`/v7/indices/3d`（类型 1、2、3、5）、`/airquality/v1/current/{lat}/{lon}`、`/v7/warning/now`。可用性取决于账号权限、订阅和地区覆盖，可能产生额外 API 调用费用。独立补充请求并发执行，单项补充有 4.5 秒总等待上限；数据分别缓存（指数 1 小时、空气质量 10 分钟、预警 5 分钟），失败短暂缓存 1 分钟，避免重复请求。基础天气缓存与并发去重保持不变。
+
+补充接口失败不会丢弃已有基本天气；内部 `brief.warnings` 区分缺失能力，预警接口不可用不等于“没有预警”。当前实现已用离线 HTTP 响应验证，真实账号授权和宿主模型最终措辞仍需实际部署验证。
+
+此功能明确扩展原 SPEC v1.3 中“不接生活指数/空气质量”的范围，保留单一工具、三个配置参数和宿主 LLM 回答的架构。
+
+### QWeather API 使用清单
+
+以下接口统一使用插件配置中的 `api_host` 作为 HTTPS 域名，通过 `X-QW-Api-Key` 请求头传入 `api_key`。路径中的 `{lat}` 和 `{lon}` 分别为纬度、经度，保留两位小数；城市查询和历史数据等接口通过参数传入地点 ID。
+
+| 接口路径 | 用途 | 调用条件 |
+|---|---|---|
+| `/geo/v2/city/lookup` | 搜索城市，获取地点 ID、经纬度、行政区和时区 | 需要解析新地点时；可复用已确认地点 |
+| `/weather/v1/current/{lat}/{lon}` | 当前天气、气温、体感温度、风、湿度和观测时间 | 查询现在，或为当天简报补充实况 |
+| `/weather/v1/daily/{lat}/{lon}` | 全天最高／最低温、白天与夜间天气和风 | 按日期查询，或补充简报的全天概况；请求参数 `days=7` |
+| `/weather/v1/hourly/{lat}/{lon}` | 逐小时气温、体感、风、降水量和降雨概率 | 查询具体时段，或补充简报的变化趋势；请求参数 `hours=24`，只使用目标时段实际返回的数据 |
+| `/v7/indices/3d` | 运动、洗车、穿衣、紫外线生活指数 | **本次新增**；目标日期在今天及未来两天内时尝试获取，按日期匹配 |
+| `/airquality/v1/current/{lat}/{lon}` | 当前空气质量、AQI 及对应指数标准 | **本次新增**；仅为当天查询补充，不作为未来空气质量预报 |
+| `/v7/warning/now` | 当前天气预警，保留仍有效的预警信息 | **本次新增**；仅为当天查询补充；接口不可用不等于没有预警 |
+| `/v7/historical/weather` | 历史天气，用于与昨日同期比较 | 仅在需要历史对比时调用；需要账号具有相应权限 |
+
+生活指数请求使用 `type=1,2,3,5`：`1` 为运动指数，`2` 为洗车指数，`3` 为穿衣指数，`5` 为紫外线指数。
+
+并非每次查询都调用全部接口：缓存命中时复用已有结果，已确认地点可省去地点搜索，历史接口只在相应对比查询中使用。未来日期不附加当前实况、当前空气质量或当前预警；历史及对比查询保留独立的数据规划，不额外拼接普通简报。
+
+上述为代码使用的接口清单，并不代表每个账号都已开通。生活指数、空气质量、预警和历史数据的授权及覆盖范围须以实际账号为准；当前自动化验证使用离线模拟响应，尚未完成真实账号联调。
 
 ## 🌟 核心设计理念
 
@@ -152,6 +185,7 @@ pip install -r astrbot_plugin_qweather_tool/requirements.txt
 astrbot-plugin-qweather-tool/
 ├── main.py                    # AstrBot Star 插件入口、get_weather 注册、生命周期
 ├── weather_service.py         # 业务编排、QueryPlanner、Tool Result 组装
+├── weather_brief.py           # 补充天气、生活指数、空气质量和预警的并发汇总
 ├── qweather_client.py         # 和风天气异步 HTTP 客户端、HTTPS 校验、QWeatherError 映射
 ├── location_resolver.py       # GeoAPI 5 级候选消歧与行政区约束
 ├── time_resolver.py           # 本地时区、时间文法、跨午夜区间解析
@@ -165,7 +199,7 @@ astrbot-plugin-qweather-tool/
 ├── docs/                      # 规范设计与实施报告
 │   ├── AstrBot-Weather-Tool-SPEC-v1.3.md
 │   └── IMPLEMENTATION-REPORT.md
-└── tests/                     # 自动化测试套件（46 个用例）
+└── tests/                     # 自动化测试套件（104 个 Python 用例及 5 个 JavaScript 用例）
     ├── test_tool_contract.py
     ├── test_location.py
     ├── test_current_weather.py
@@ -188,6 +222,9 @@ pip install pytest pytest-asyncio
 
 # 运行全量测试
 pytest -v
+
+# 连接测试视图的 JavaScript 离线测试（Node.js）
+node tests/test_plugin_view.mjs
 ```
 
 测试覆盖 SPEC v1.3 中定义的 75 项合约与验收场景（C01–C75）：

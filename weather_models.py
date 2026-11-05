@@ -12,6 +12,7 @@ class NormalizedCurrentWeather:
     condition: Optional[str] = None
     wind_speed_ms: Optional[float] = None
     wind_gust_ms: Optional[float] = None
+    wind_direction: Optional[str] = None
     precipitation_mm: Optional[float] = None
     relative_humidity: Optional[float] = None
     precipitation_probability: Optional[float] = None  # None for Current (SPEC C49)
@@ -25,6 +26,7 @@ class NormalizedCurrentWeather:
             "condition": self.condition,
             "wind_speed_ms": self.wind_speed_ms,
             "wind_gust_ms": self.wind_gust_ms,
+            "wind_direction": self.wind_direction,
             "precipitation_mm": self.precipitation_mm,
             "precipitation_probability": self.precipitation_probability,
             "relative_humidity": self.relative_humidity,
@@ -41,6 +43,10 @@ class NormalizedDailyForecast:
     condition_day: Optional[str] = None
     condition_night: Optional[str] = None
     precipitation_mm: Optional[float] = None
+    wind_speed_day_ms: Optional[float] = None
+    wind_speed_night_ms: Optional[float] = None
+    wind_direction_day: Optional[str] = None
+    wind_direction_night: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -50,6 +56,10 @@ class NormalizedDailyForecast:
             "condition_day": self.condition_day,
             "condition_night": self.condition_night,
             "precipitation_mm": self.precipitation_mm,
+            "wind_speed_day_ms": self.wind_speed_day_ms,
+            "wind_speed_night_ms": self.wind_speed_night_ms,
+            "wind_direction_day": self.wind_direction_day,
+            "wind_direction_night": self.wind_direction_night,
         }
 
 
@@ -125,6 +135,7 @@ def normalize_current_weather(now_data: Dict[str, Any]) -> NormalizedCurrentWeat
         condition=str(cond_text) if cond_text else None,
         wind_speed_ms=wind_speed,
         wind_gust_ms=wind_gust,
+        wind_direction=wind_dict.get("direction") if isinstance(wind_dict, dict) and isinstance(wind_dict.get("direction"), str) else None,
         precipitation_mm=precip_mm,
         relative_humidity=humidity,
         precipitation_probability=None,
@@ -153,6 +164,13 @@ def normalize_daily_forecast(daily_list: List[Dict[str, Any]]) -> List[Normalize
             precip_mm = _parse_float(amount_dict.get("value") if isinstance(amount_dict, dict) else amount_dict)
 
         raw_date = d.get("fxDate") or str(d.get("forecastStartTime", ""))[:10]
+        day_wind = day_dict.get("wind") if isinstance(day_dict, dict) else None
+        night_wind = night_dict.get("wind") if isinstance(night_dict, dict) else None
+
+        def wind_speed(wind):
+            value = wind.get("speed") if isinstance(wind, dict) else None
+            return _parse_float(value.get("value") if isinstance(value, dict) else value)
+
         results.append(
             NormalizedDailyForecast(
                 date=str(raw_date),
@@ -161,6 +179,10 @@ def normalize_daily_forecast(daily_list: List[Dict[str, Any]]) -> List[Normalize
                 condition_day=day_cond,
                 condition_night=night_cond,
                 precipitation_mm=precip_mm,
+                wind_speed_day_ms=wind_speed(day_wind),
+                wind_speed_night_ms=wind_speed(night_wind),
+                wind_direction_day=day_wind.get("direction") if isinstance(day_wind, dict) else None,
+                wind_direction_night=night_wind.get("direction") if isinstance(night_wind, dict) else None,
             )
         )
     return results

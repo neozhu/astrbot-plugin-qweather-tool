@@ -124,9 +124,9 @@ def test_hourly_precip_probability_ratio_c34(hourly_v1_data):
 
 
 @pytest.mark.asyncio
-async def test_query_planner_routes_to_daily_without_current_c44(daily_v1_data):
+async def test_query_planner_keeps_daily_primary_with_optional_current_c44(daily_v1_data):
     """SPEC §8.1, C44:
-    when='today', focus='general' queries Daily forecast; does not call Current.
+    Today's primary facts remain Daily; brief may separately supplement Current.
     """
     from weather_service import WeatherService
     from location_resolver import ResolvedLocation
@@ -141,11 +141,13 @@ async def test_query_planner_routes_to_daily_without_current_c44(daily_v1_data):
     with patch.object(service.location_resolver, "resolve") as mock_loc:
         mock_loc.return_value = AsyncMock(status="ok", location=loc, candidates=[])
         with patch.object(service.client, "get_daily_forecast", return_value=daily_v1_data["daily"]) as mock_daily:
-            with patch.object(service.client, "get_current_weather") as mock_curr:
+            with patch.object(service.client, "get_current_weather", return_value={}) as mock_curr:
                 res = await service.query(None, location_text="昆山", when_text="today", focus_text="general")
 
                 assert mock_daily.called
-                assert not mock_curr.called  # MUST NOT call Current
+                assert mock_curr.call_count == 1
+                assert res["current_snapshot"] is None
+                assert res["weather"]["temperature_c"] is None
                 assert res["status"] == "ok"
                 assert res["weather"]["temperature_max_c"] == 22.0
                 assert res["weather"]["temperature_min_c"] == 13.0
@@ -177,7 +179,9 @@ async def test_query_planner_routes_to_hourly_for_future_daypart_c45_c46(hourly_
                 assert not mock_curr.called  # MUST NOT call Current
                 assert res["status"] == "ok"
                 assert "forecast_hourly" in res["source"]["data_kinds"]
-                assert res["weather"]["precipitation_probability"] == 0.31
+                # Peak individual-hour probability across the requested morning,
+                # rather than silently taking only its first hour.
+                assert res["weather"]["precipitation_probability"] == 0.35
 
 
 def test_focus_alias_mapping_and_fallback_c61():

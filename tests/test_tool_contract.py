@@ -156,7 +156,9 @@ async def test_tool_invocation_returns_json_to_agent_without_sending(focus, stat
         assert event.get_result() is None
         assert len(results) == 1
         assert results[0] is not None, "None would terminate the Agent loop"
-        assert json.loads(results[0].content[0].text) == payload
+        returned = json.loads(results[0].content[0].text)
+        assert returned.pop("response_guidance")
+        assert returned == payload
     finally:
         await plugin.terminate()
 
