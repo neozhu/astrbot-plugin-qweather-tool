@@ -270,20 +270,19 @@ class QWeatherPlugin(Star):
             return json_response({
                 "success": False,
                 "code": "MISSING_API_KEY",
-                "message": "未配置 API Key。请在 AstrBot 控制台填写或在上方临时测试框输入。",
+                "message": "未配置 API Key。请在 AstrBot 插件配置中填写并保存。",
                 "api_host": api_host,
             })
 
         clean_host = api_host.replace("https://", "").replace("http://", "").strip("/")
-        test_url = f"https://{clean_host}/v2/city/lookup"
+        test_url = f"https://{clean_host}/geo/v2/city/lookup"
 
         start_time = time.time()
         try:
             timeout = aiohttp.ClientTimeout(total=6.0)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 headers = {"X-QW-Api-Key": api_key}
-                test_city = req_data.get("city") or self.config.get("default_city") or "北京"
-                params = {"location": test_city}
+                params = {"location": "101010100"}
                 async with session.get(test_url, headers=headers, params=params) as resp:
                     latency_ms = int((time.time() - start_time) * 1000)
                     resp_status = resp.status
@@ -292,18 +291,14 @@ class QWeatherPlugin(Star):
                     except Exception:
                         resp_data = {}
 
-                    code = str(resp_data.get("code", resp_status))
+                    code = str(resp_data.get("code", resp_status if resp_status != 200 else "INVALID_RESPONSE"))
                     if resp_status == 200 and code == "200":
-                        locations = resp_data.get("location", [])
-                        loc_name = locations[0].get("name", test_city) if locations else test_city
-                        adm1 = locations[0].get("adm1", "") if locations else ""
                         return json_response({
                             "success": True,
                             "code": "200",
                             "latency_ms": latency_ms,
                             "message": f"连接成功！QWeather GeoAPI 鉴权与网络正常 (耗时 {latency_ms}ms)。",
                             "api_host": clean_host,
-                            "resolved_city": f"{loc_name} ({adm1})" if adm1 else loc_name,
                         })
                     elif resp_status == 401 or code == "401":
                         return json_response({
@@ -326,7 +321,7 @@ class QWeatherPlugin(Star):
                             "success": False,
                             "code": "403",
                             "latency_ms": latency_ms,
-                            "message": f"无权限访问 (403 Forbidden)：请确认域名 {clean_host} 是否与您的 QWeather 项目凭证类型匹配（免费版凭证请用 devapi.qweather.com，商业版请用 api.qweather.com）。",
+                            "message": f"无权限访问 (403 Forbidden)：请确认专属 API Host {clean_host} 与密钥所属项目一致，并检查接口访问权限。",
                             "api_host": clean_host,
                         })
                     else:

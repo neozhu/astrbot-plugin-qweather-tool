@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>和风天气测试</title>
+  <title>和风天气 API 连接测试</title>
   <style>
     :root {
       color-scheme: light dark;
@@ -91,7 +91,7 @@
     <section class="card" aria-labelledby="title" data-state="idle" id="test-card">
       <div class="intro">
         <div class="heading">
-          <div><p class="eyebrow">配置验证</p><h1 id="title">天气查询测试</h1></div>
+          <div><p class="eyebrow">配置验证</p><h1 id="title">API 连接测试</h1></div>
           <svg class="weather-icon" viewBox="0 0 90 72" fill="none" aria-hidden="true">
             <circle cx="61" cy="25" r="13" fill="#f2cf7c"/>
             <g stroke="#c6973b" stroke-width="1.5" stroke-linecap="round"><path d="M61 4V1M61 49v-3M82 25h4M37 25h3M76 10l3-3M76 40l3 3M46 10l-3-3"/></g>
@@ -99,11 +99,11 @@
             <path d="M23 65h24M53 65h7" stroke="var(--accent)" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
-        <p class="description">一键确认天气服务是否可用。使用已保存的插件配置，发起一次真实的当前天气查询。</p>
+        <p class="description">一键确认 API 域名与密钥是否可用。使用已保存的插件配置，检查网络连接和接口认证。</p>
       </div>
       <dl class="settings">
         <div class="setting"><dt>使用配置</dt><dd>已保存的 API 域名与密钥</dd></div>
-        <div class="setting"><dt>查询城市</dt><dd>默认城市 · 未设置时为北京</dd></div>
+        <div class="setting"><dt>检查内容</dt><dd>网络连通性与密钥认证</dd></div>
       </dl>
       <div class="actions">
         <div class="feedback" role="status" aria-live="polite" aria-atomic="true">
@@ -113,7 +113,7 @@
             <g class="cross"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6m0-6-6 6"/></g>
             <path class="loading" d="M21 12a9 9 0 1 1-9-9"/>
           </svg>
-          <div><h2 id="status">等待测试</h2><p class="hint" id="status-hint">点击下方按钮，检查连接并获取天气结果。</p></div>
+          <div><h2 id="status">等待测试</h2><p class="hint" id="status-hint">点击下方按钮，验证 API 连接是否正常。</p></div>
         </div>
         <button id="test-button" type="button">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m7 4 8 6-8 6V4Z" stroke-linejoin="round"/></svg>
@@ -121,7 +121,7 @@
         </button>
       </div>
       <details id="result-details" class="details" hidden>
-        <summary>查看原始查询结果</summary>
+        <summary>查看接口测试结果</summary>
         <pre id="result"></pre>
       </details>
     </section>
@@ -141,7 +141,7 @@
       label.textContent = '正在测试…';
       card.dataset.state = 'loading';
       status.textContent = '正在连接天气服务';
-      hint.textContent = '正在查询当前天气，请稍候。';
+      hint.textContent = '正在验证 API 连接与密钥，请稍候。';
       details.hidden = true;
       details.open = false;
       result.textContent = '';
@@ -149,16 +149,18 @@
         const bridge = window.AstrBotPluginView || window.AstrBotPluginPage;
         if (!bridge) throw new Error('请从 AstrBot 控制台的插件详情中打开测试视图。');
         await bridge.ready();
-        const data = await bridge.apiPost('test-query', { when: 'now', focus: 'general' });
+        const data = await bridge.apiPost('test-connection', {});
         card.dataset.state = data.success ? 'success' : 'error';
         status.textContent = data.success ? '测试成功' : '测试未通过';
-        hint.textContent = data.success ? '已成功获取当前天气，天气查询服务可用。' : '请检查插件配置，展开原始结果查看具体原因。';
-        result.textContent = JSON.stringify(data.result || data, null, 2);
+        hint.textContent = data.message || (data.success ? 'API 连接与密钥认证正常。' : '请检查插件配置，展开测试结果查看具体原因。');
+        result.textContent = JSON.stringify(data, null, 2);
         details.hidden = false;
       } catch (error) {
         card.dataset.state = 'error';
         status.textContent = '连接失败';
-        hint.textContent = error.message;
+        hint.textContent = error.message === 'Failed to fetch'
+          ? '测试页未能连接到 AstrBot 后端。请刷新控制台并重新打开测试视图。'
+          : error.message;
       } finally {
         button.disabled = false;
         label.textContent = '重新测试';
