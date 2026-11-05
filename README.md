@@ -1,5 +1,6 @@
 # astrbot-plugin-qweather-tool
 
+[![CI](https://github.com/neozhu/astrbot-plugin-qweather-tool/actions/workflows/ci.yml/badge.svg)](https://github.com/neozhu/astrbot-plugin-qweather-tool/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![AstrBot](https://img.shields.io/badge/AstrBot-4.x-green.svg)](https://github.com/Soulter/AstrBot)
 [![Tests](https://img.shields.io/badge/Tests-104%20Passed-success.svg)]()
@@ -217,8 +218,8 @@ astrbot-plugin-qweather-tool/
 项目内置完整的离线测试套件，无需连接外部网络或消耗真实 API 额度：
 
 ```bash
-# 安装测试依赖
-pip install pytest pytest-asyncio
+# 安装运行及测试依赖（包含 AstrBot 宿主）
+python -m pip install -r requirements-dev.txt
 
 # 运行全量测试
 pytest -v
@@ -226,6 +227,12 @@ pytest -v
 # 连接测试视图的 JavaScript 离线测试（Node.js）
 node tests/test_plugin_view.mjs
 ```
+
+### GitHub Actions CI
+
+[CI 工作流](.github/workflows/ci.yml) 在每次推送、Pull Request 和手动触发时运行，使用 Python 3.12、Node.js 24 和 AstrBot 4.29.4。自动检查依赖一致性，运行完整 Python 测试与 JavaScript 视图测试，并上传保留 7 天的 Python JUnit 测试报告。同一分支有新提交时，会取消旧的 CI 运行。
+
+CI 使用离线模拟数据，无需配置 QWeather API Key 或其他 Secrets。可在仓库的 **Actions → CI** 查看运行结果或手动启动。工作流只运行测试，不发布版本或部署插件。
 
 测试覆盖 SPEC v1.3 中定义的 75 项合约与验收场景（C01–C75）：
 - 地点消歧与 Rank 阈值（`昆山` vs `昆山区`）
