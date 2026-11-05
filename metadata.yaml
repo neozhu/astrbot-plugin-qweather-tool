@@ -9,6 +9,7 @@ version: "0.1.4"
 author: neozhu
 repo: https://github.com/neozhu/astrbot-plugin-qweather-tool
 astrbot_version: ">=4.14.0"
+category: utilities
 tags:
   - weather
   - qweather
