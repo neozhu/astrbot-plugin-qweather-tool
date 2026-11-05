@@ -94,7 +94,7 @@ def strip_weather_markdown(text: str) -> str:
     "astrbot_plugin_qweather_tool",
     "neozhu",
     "A context-aware weather tool for AstrBot LLM agents powered by QWeather.",
-    "0.1.3",
+    "0.1.4",
 )
 class QWeatherPlugin(Star):
     def __init__(self, context: Context, config: Dict[str, Any] = None):
@@ -281,7 +281,7 @@ class QWeatherPlugin(Star):
                 masked = "********"
         return json_response({
             "plugin": PLUGIN_NAME,
-            "version": "0.1.3",
+            "version": "0.1.4",
             "api_host": self.config.get("api_host") or "devapi.qweather.com",
             "has_api_key": bool(api_key),
             "masked_api_key": masked,
