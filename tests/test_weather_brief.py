@@ -238,7 +238,9 @@ async def test_tool_returns_rich_facts_with_concise_plain_response_guidance(plat
     try:
         result = json.loads(await plugin.get_weather(event, "", "now", "general"))
         assert result["brief"]["current"]["feels_like_c"] == 14
-        assert "一到两段" in result["response_guidance"]
+        # Guidance must allow short answers instead of imposing a weather bulletin.
+        assert "一到两段" not in result["response_guidance"]
+        assert "先说天气" not in result["response_guidance"]
         assert "不使用图标或表情" in result["response_guidance"]
         assert "体感" in result["response_guidance"]
         assert "逐小时" in result["response_guidance"]
